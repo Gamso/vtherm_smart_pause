@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+    push:
+    pull_request:
+    workflow_dispatch:
+
+jobs:
+    tests:
+        runs-on: ubuntu-latest
+        name: Run tests
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+
+            # Home Assistant 2026.11 (the minimum in hacs.json) requires Python >= 3.14.2.
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.14"
+
+            - name: Install dependencies
+              run: |
+                  pip install -r requirements_test.txt
+
+            - name: Run tests
+              run: |
+                  pytest tests/ -v --tb=short
+
+    lint:
+        runs-on: ubuntu-latest
+        name: Lint (black, pylint)
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.14"
+
+            - name: Install dependencies
+              run: |
+                  pip install -r requirements_test.txt black==26.5.1 pylint==4.1.2
+
+            - name: Check formatting (pyproject.toml)
+              run: |
+                  black --check --diff custom_components tests
+
+            - name: Run pylint (.pylintrc)
+              run: |
+                  pylint custom_components/vtherm_smart_pause

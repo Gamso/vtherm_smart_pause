@@ -1,0 +1,76 @@
+"""Constants for VTherm Smart Pause. Imports nothing from Home Assistant."""
+
+from __future__ import annotations
+
+DOMAIN = "vtherm_smart_pause"
+FEATURE_MANAGER_NAME = DOMAIN
+DEVICE_NAME = "Versatile Thermostat Smart Pause"
+
+VTHERM_DOMAIN = "versatile_thermostat"
+CONF_THERMOSTAT_TYPE = "thermostat_type"
+CONF_THERMOSTAT_CLIMATE = "thermostat_over_climate"
+#: VTherm's own option for its built-in auto start/stop.
+VTHERM_CONF_AUTO_START_STOP = "use_auto_start_stop_feature"
+#: VTherm reports this reason when a window opening switched it off.
+HVAC_OFF_REASON_WINDOW = "hvac_off_window_detection"
+#: Command cause VTherm passes when it follows a change made on the device itself.
+COMMAND_CAUSE_UNDERLYING_TRACKING = "underlying_tracking"
+
+# Configuration keys
+CONF_TARGET_VTHERM = "target_vtherm"  # unique_id of the VTherm this plugin drives
+CONF_THRESHOLD_HEAT = "threshold_heat"
+CONF_THRESHOLD_COOL = "threshold_cool"
+CONF_WEATHER_ENTITY = "weather_entity"
+CONF_POWER_ENTITY = "power_entity"
+CONF_COMPRESSOR_ENTITY = "compressor_entity"
+CONF_DEFROST_ENTITY = "defrost_entity"
+CONF_SETBACK_HEAT = "setback_heat"
+CONF_SETBACK_COOL = "setback_cool"
+CONF_COMFORT_EXCESS = "comfort_excess"
+CONF_COMFORT_EXCESS_MINUTES = "comfort_excess_minutes"
+CONF_COMFORT_MARGIN = "comfort_margin"
+CONF_COMFORT_MIN_PAUSE = "comfort_min_pause_minutes"
+CONF_ECO_EXCESS = "eco_excess"
+CONF_ECO_EXCESS_MINUTES = "eco_excess_minutes"
+CONF_ECO_MARGIN = "eco_margin"
+CONF_ECO_MIN_PAUSE = "eco_min_pause_minutes"
+CONF_MIN_RUN_MINUTES = "min_run_minutes"
+CONF_MIN_OFF_MINUTES = "min_off_minutes"
+CONF_MAX_PAUSES_PER_DAY = "max_pauses_per_day"
+CONF_OUTDOOR_FLOOR_HEAT = "outdoor_floor_heat"
+CONF_OUTDOOR_CEILING_COOL = "outdoor_ceiling_cool"
+
+#: Setback used when the VTherm publishes no min_temp / max_temp.
+FALLBACK_SETBACK_HEAT = 7.0
+FALLBACK_SETBACK_COOL = 35.0
+
+# hass.data sub-keys (see registry.py)
+DATA_FACTORY_REGISTERED = "factory_registered"
+DATA_MANAGERS = "managers"
+DATA_ADD_ENTITIES = "add_entities"
+DATA_ENTITIES = "entities"
+
+PLATFORM_SENSOR = "sensor"
+PLATFORM_SWITCH = "switch"
+
+STORAGE_VERSION = 1
+STORAGE_KEY = DOMAIN
+#: The model and the pause state are saved at most this often, and on every pause or resume.
+SAVE_INTERVAL_S = 600.0
+
+#: Attribute section published in the VTherm's own state attributes.
+ATTR_SECTION = "smart_pause"
+
+#: Weather forecast refresh period and how long a stale forecast is still used.
+FORECAST_REFRESH_S = 1800.0
+FORECAST_MAX_AGE_S = 3 * 3600.0
+#: Activity window and threshold for the "something to save" condition.
+ACTIVITY_WINDOW_S = 1800.0
+ACTIVITY_MIN_POWER_W = 30.0
+
+ENTITY_UNIQUE_ID_PREFIX = DOMAIN
+
+
+def build_unique_id(object_key: str, entry_id: str) -> str:
+    """Build the canonical unique_id for an entity."""
+    return f"{ENTITY_UNIQUE_ID_PREFIX}_{object_key}_{entry_id}"

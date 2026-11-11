@@ -1,0 +1,98 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pause intelligente d'un Versatile Thermostat",
+        "description": "Met en pause l'équipement d'un thermostat over_climate quand la pièce n'en a pas besoin et tiendra sans lui.",
+        "data": {
+          "target_vtherm": "Versatile Thermostat",
+          "threshold_heat": "Chauffage : profil confort à partir de cette consigne",
+          "threshold_cool": "Climatisation : profil confort jusqu'à cette consigne",
+          "weather_entity": "Prévision météo",
+          "power_entity": "Puissance ou énergie de l'équipement",
+          "compressor_entity": "Compresseur en marche",
+          "defrost_entity": "Dégivrage ou préchauffage"
+        },
+        "data_description": {
+          "threshold_heat": "Une consigne supérieure ou égale utilise le profil confort (marges serrées), une consigne inférieure le profil éco. Vide : toujours confort.",
+          "threshold_cool": "Une consigne inférieure ou égale utilise le profil confort, une consigne supérieure le profil éco. Vide : toujours confort.",
+          "weather_entity": "Prévision horaire de la température extérieure et des nuages, pour prédire combien de temps la pièce tient.",
+          "power_entity": "Facultatif. Le plugin ne met alors en pause qu'un équipement qui consomme, et estime l'énergie évitée. Un compteur d'énergie différé convient aussi.",
+          "compressor_entity": "Facultatif. Allumé quand le compresseur tourne.",
+          "defrost_entity": "Facultatif. Allumé pendant un dégivrage (ou un préchauffage) : ni décision, ni apprentissage."
+        }
+      }
+    },
+    "error": {
+      "not_a_vtherm": "Choisissez une entité climate de Versatile Thermostat.",
+      "not_over_climate": "Seuls les thermostats over_climate sont pris en charge."
+    },
+    "abort": {
+      "already_configured": "Ce thermostat a déjà une pause intelligente."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options de la pause intelligente",
+        "data": {
+          "threshold_heat": "Chauffage : profil confort à partir de cette consigne",
+          "threshold_cool": "Climatisation : profil confort jusqu'à cette consigne",
+          "weather_entity": "Prévision météo",
+          "power_entity": "Puissance ou énergie de l'équipement",
+          "compressor_entity": "Compresseur en marche",
+          "defrost_entity": "Dégivrage ou préchauffage",
+          "setback_heat": "Consigne de veille en chauffage",
+          "setback_cool": "Consigne de veille en climatisation",
+          "comfort_excess": "Confort : excédent sur la consigne",
+          "comfort_excess_minutes": "Confort : durée de l'excédent",
+          "comfort_margin": "Confort : marge",
+          "comfort_min_pause_minutes": "Confort : autonomie nécessaire pour la pause",
+          "eco_excess": "Éco : excédent sur la consigne",
+          "eco_excess_minutes": "Éco : durée de l'excédent",
+          "eco_margin": "Éco : marge",
+          "eco_min_pause_minutes": "Éco : autonomie nécessaire pour la pause",
+          "min_run_minutes": "Marche minimale après une reprise",
+          "min_off_minutes": "Pause minimale",
+          "max_pauses_per_day": "Pauses maximales par jour",
+          "outdoor_floor_heat": "Pas de pause en chauffage en dessous de",
+          "outdoor_ceiling_cool": "Pas de pause en climatisation au-dessus de"
+        },
+        "data_description": {
+          "setback_heat": "Consigne envoyée pendant la pause. Vide : la température minimale du thermostat.",
+          "setback_cool": "Consigne envoyée pendant la pause. Vide : la température maximale du thermostat.",
+          "comfort_margin": "La pause se termine avant que la pièce ne dépasse la consigne de cette valeur du côté inconfortable."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "state": {
+        "name": "État",
+        "state": {
+          "running": "En marche",
+          "paused": "En pause",
+          "inactive": "Inactif"
+        }
+      },
+      "autonomy": {
+        "name": "Autonomie"
+      },
+      "heat_loss": {
+        "name": "Coefficient de déperdition"
+      },
+      "pauses_today": {
+        "name": "Pauses du jour"
+      },
+      "avoided_energy": {
+        "name": "Énergie évitée"
+      }
+    },
+    "switch": {
+      "enabled": {
+        "name": "Pause intelligente"
+      }
+    }
+  }
+}

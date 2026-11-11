@@ -1,0 +1,13 @@
+[tool.black]
+line-length = 180
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+# Home Assistant 2026.11 is the floor: a deprecated Home Assistant API used by
+# this integration must fail the suite, not just warn.
+filterwarnings = [
+    "error::DeprecationWarning:custom_components.vtherm_smart_pause.*",
+    "error::PendingDeprecationWarning:custom_components.vtherm_smart_pause.*",
+]

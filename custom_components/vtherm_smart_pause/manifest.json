@@ -1,0 +1,20 @@
+{
+  "domain": "vtherm_smart_pause",
+  "name": "Versatile Thermostat Smart Pause",
+  "after_dependencies": [
+    "versatile_thermostat"
+  ],
+  "codeowners": [
+    "@Gamso"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Gamso/vtherm_smart_pause",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/Gamso/vtherm_smart_pause/issues",
+  "loggers": [
+    "custom_components.vtherm_smart_pause"
+  ],
+  "version": "0.1.0"
+}

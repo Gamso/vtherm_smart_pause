@@ -1,0 +1,98 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart pause for a Versatile Thermostat",
+        "description": "Pause the equipment of an over_climate thermostat while the room does not need it and will hold without it.",
+        "data": {
+          "target_vtherm": "Versatile Thermostat",
+          "threshold_heat": "Heating: comfort profile from this setpoint",
+          "threshold_cool": "Cooling: comfort profile up to this setpoint",
+          "weather_entity": "Weather forecast",
+          "power_entity": "Power or energy of the equipment",
+          "compressor_entity": "Compressor running",
+          "defrost_entity": "Defrost or preheating"
+        },
+        "data_description": {
+          "threshold_heat": "A setpoint at or above it uses the comfort profile (tight margins), below it the eco profile. Empty: always comfort.",
+          "threshold_cool": "A setpoint at or below it uses the comfort profile, above it the eco profile. Empty: always comfort.",
+          "weather_entity": "Hourly forecast of the outdoor temperature and the clouds, used to predict how long the room holds.",
+          "power_entity": "Optional. Lets the plugin pause only an equipment that consumes, and estimate the energy avoided. A delayed energy counter works too.",
+          "compressor_entity": "Optional. On while the compressor runs.",
+          "defrost_entity": "Optional. On during a defrost (or a preheating): no decision, no learning."
+        }
+      }
+    },
+    "error": {
+      "not_a_vtherm": "Pick a climate entity of Versatile Thermostat.",
+      "not_over_climate": "Only over_climate thermostats are supported."
+    },
+    "abort": {
+      "already_configured": "This thermostat already has a smart pause."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart pause options",
+        "data": {
+          "threshold_heat": "Heating: comfort profile from this setpoint",
+          "threshold_cool": "Cooling: comfort profile up to this setpoint",
+          "weather_entity": "Weather forecast",
+          "power_entity": "Power or energy of the equipment",
+          "compressor_entity": "Compressor running",
+          "defrost_entity": "Defrost or preheating",
+          "setback_heat": "Heating setback",
+          "setback_cool": "Cooling setback",
+          "comfort_excess": "Comfort: excess over the setpoint",
+          "comfort_excess_minutes": "Comfort: excess duration",
+          "comfort_margin": "Comfort: margin",
+          "comfort_min_pause_minutes": "Comfort: autonomy needed to pause",
+          "eco_excess": "Eco: excess over the setpoint",
+          "eco_excess_minutes": "Eco: excess duration",
+          "eco_margin": "Eco: margin",
+          "eco_min_pause_minutes": "Eco: autonomy needed to pause",
+          "min_run_minutes": "Minimum run after a resume",
+          "min_off_minutes": "Minimum pause",
+          "max_pauses_per_day": "Maximum pauses per day",
+          "outdoor_floor_heat": "No pause in heating below",
+          "outdoor_ceiling_cool": "No pause in cooling above"
+        },
+        "data_description": {
+          "setback_heat": "Setpoint sent while paused. Empty: the thermostat's minimum temperature.",
+          "setback_cool": "Setpoint sent while paused. Empty: the thermostat's maximum temperature.",
+          "comfort_margin": "The pause ends before the room passes the setpoint by this much on the uncomfortable side."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "state": {
+        "name": "State",
+        "state": {
+          "running": "Running",
+          "paused": "Paused",
+          "inactive": "Inactive"
+        }
+      },
+      "autonomy": {
+        "name": "Autonomy"
+      },
+      "heat_loss": {
+        "name": "Heat loss coefficient"
+      },
+      "pauses_today": {
+        "name": "Pauses today"
+      },
+      "avoided_energy": {
+        "name": "Avoided energy"
+      }
+    },
+    "switch": {
+      "enabled": {
+        "name": "Smart pause"
+      }
+    }
+  }
+}
