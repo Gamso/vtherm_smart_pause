@@ -6,16 +6,16 @@
         "description": "Met en pause l'équipement d'un thermostat over_climate quand la pièce n'en a pas besoin et tiendra sans lui.",
         "data": {
           "target_vtherm": "Versatile Thermostat",
-          "threshold_heat": "Chauffage : profil confort à partir de cette consigne",
-          "threshold_cool": "Climatisation : profil confort jusqu'à cette consigne",
+          "threshold_heat": "Chauffage : seuil du start/stop",
+          "threshold_cool": "Climatisation : seuil du start/stop",
           "weather_entity": "Prévision météo",
           "power_entity": "Puissance ou énergie de l'équipement",
           "compressor_entity": "Compresseur en marche",
           "defrost_entity": "Dégivrage ou préchauffage"
         },
         "data_description": {
-          "threshold_heat": "Une consigne supérieure ou égale utilise le profil confort (marges serrées), une consigne inférieure le profil éco. Vide : toujours confort.",
-          "threshold_cool": "Une consigne inférieure ou égale utilise le profil confort, une consigne supérieure le profil éco. Vide : toujours confort.",
+          "threshold_heat": "Sous cette consigne, l'auto-start/stop de VTherm éteint et rallume l'équipement. À partir de cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours.",
+          "threshold_cool": "Au-dessus de cette consigne, l'auto-start/stop de VTherm éteint et rallume l'équipement. Jusqu'à cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours.",
           "weather_entity": "Prévision horaire de la température extérieure et des nuages, pour prédire combien de temps la pièce tient.",
           "power_entity": "Facultatif. Le plugin ne met alors en pause qu'un équipement qui consomme, et estime l'énergie évitée. Un compteur d'énergie différé convient aussi.",
           "compressor_entity": "Facultatif. Allumé quand le compresseur tourne.",
@@ -36,8 +36,8 @@
       "init": {
         "title": "Options de la pause intelligente",
         "data": {
-          "threshold_heat": "Chauffage : profil confort à partir de cette consigne",
-          "threshold_cool": "Climatisation : profil confort jusqu'à cette consigne",
+          "threshold_heat": "Chauffage : seuil du start/stop",
+          "threshold_cool": "Climatisation : seuil du start/stop",
           "weather_entity": "Prévision météo",
           "power_entity": "Puissance ou énergie de l'équipement",
           "compressor_entity": "Compresseur en marche",
@@ -61,7 +61,9 @@
         "data_description": {
           "setback_heat": "Consigne envoyée pendant la pause. Vide : la température minimale du thermostat.",
           "setback_cool": "Consigne envoyée pendant la pause. Vide : la température maximale du thermostat.",
-          "comfort_margin": "La pause se termine avant que la pièce ne dépasse la consigne de cette valeur du côté inconfortable."
+          "comfort_margin": "La pause se termine avant que la pièce ne dépasse la consigne de cette valeur du côté inconfortable.",
+          "threshold_heat": "Sous cette consigne, l'auto-start/stop de VTherm éteint et rallume l'équipement. À partir de cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours.",
+          "threshold_cool": "Au-dessus de cette consigne, l'auto-start/stop de VTherm éteint et rallume l'équipement. Jusqu'à cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours."
         }
       }
     }

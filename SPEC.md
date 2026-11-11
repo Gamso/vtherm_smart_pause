@@ -17,8 +17,8 @@ room fall below `setpoint − margin`.
 - **Any heat pump or air conditioner** behind an `over_climate` VTherm, whatever the brand or the
   integration: nothing may depend on an entity or a behaviour specific to one manufacturer.
 - `heat` **and** `cool` modes from the first version (mirrored), one VTherm per config entry.
-- A setpoint threshold per `hvac_mode`, taken from HomeShift, that picks the profile (eco /
-  comfort).
+- A start/stop threshold per `hvac_mode`, taken from HomeShift: on its eco side VTherm's own auto
+  start/stop decides, on its comfort side the smart pause.
 - A learned heat-loss model, the weather forecast, optional equipment entities.
 
 **Out of scope**
@@ -67,9 +67,9 @@ The pure modules import neither Home Assistant nor `vtherm_api`, for the tests a
 | Key | Type | Default | Role |
 |---|---|---|---|
 | `target_vtherm` | `over_climate` VTherm | required | the equipment driven |
-| `threshold_heat` | °C | empty | setpoint ≥ threshold → comfort profile in heating. Empty: always comfort |
-| `threshold_cool` | °C | empty | setpoint ≤ threshold → comfort profile in cooling. Empty: always comfort |
-| `stop_mode` *(planned)* | `setback` / `inhibit` / `delegate` | `setback` | §8 |
+| `threshold_heat` | °C | empty | start/stop threshold in heating: below it VTherm's auto start/stop decides, at or above it the smart pause (comfort profile). Empty: the smart pause always decides (§8.4) |
+| `threshold_cool` | °C | empty | mirrored in cooling: above it VTherm decides, at or below it the smart pause |
+| `stop_mode` *(planned)* | `setback` / `inhibit` | `setback` | §8 |
 | `setback_heat` / `setback_cool` | °C | the VTherm's `min_temp` / `max_temp` | setpoint sent in `setback` (VTherm clamps it to the device limits anyway) |
 | `weather_entity` | `weather.*` | optional | forecast (§7). Without it, `T_out` stays at its current value |
 | `power_entity` | W / kW sensor **or** Wh / kWh counter | optional | gain and the "something to save" condition (§5.3) |
@@ -94,7 +94,8 @@ Shared: `min_run_minutes` (15), `min_off_minutes` (20), `max_pauses_per_day` (8)
 
 The comfort profile was calibrated on the replay of the ten days (study §8): 0.3 °C / 20 min /
 0.3 °C gives 6.2 kWh of gross energy while paused in 14 pauses, at most 3 a day, never closer than
-0.15 °C to the limit. The eco profile is not calibrated yet: the dataset's nights are already handled
+0.15 °C to the limit. The eco profile is only a fallback, for the eco side of a threshold on a
+thermostat without VTherm's auto start/stop, and is not calibrated: the dataset's nights are handled
 by VTherm's own auto start/stop.
 
 Without a threshold, the **comfort** profile applies: the most prudent for a thermostat nobody has
@@ -213,7 +214,7 @@ state (a pause survives a restart), switch, avoided energy.
 |---|---|---|---|
 | `setback` | `adjust_regulated_temperature()` returns `setback_heat` / `setback_cool` | returns `None` (VTherm takes its setpoint back) | VTherm stays in `heat` / `cool`. `Regulated_target_temperature` shows the setback |
 | `inhibit` *(planned)* | `VThermAPI.set_inhibition(entity_id, stop_underlyings=True)` | `unset_inhibition(entity_id)` | VTherm shown `off`, `hvac_off_reason = hvac_off_inhibition` |
-| `delegate` *(planned)* | turns `switch.<vtherm>_enable_auto_start_stop` on (eco profile only) | turns it off in the comfort profile | VTherm's |
+| `delegate` (eco side of the threshold) | turns `switch.<vtherm>_enable_auto_start_stop` on: VTherm decides | turns it off on the comfort side | VTherm's (`off` while it stops the equipment) |
 
 What follows was read in the code of `vtherm_api` 0.9.0 and VTherm (`main`, 10.6.4) on 11/11/2026.
 
@@ -263,12 +264,29 @@ What follows was read in the code of `vtherm_api` 0.9.0 and VTherm (`main`, 10.6
 sees a setpoint change. `inhibit` is for devices that still draw too much in thermo-off, or cannot go
 low enough in setpoint.
 
-**One decider**: in `setback` as in `inhibit`, the plugin should switch the native auto start/stop
-off while it is active and restore it on unload. Otherwise, after an inhibition is lifted, the native
-auto start/stop may send the VTherm back to `off`. v0.1.0 only logs a warning when it is enabled.
+**One decider**: the plugin owns VTherm's auto start/stop switch (§8.4). It is on only on the eco
+side of a threshold, off everywhere else. Otherwise, after an inhibition is lifted, the native
+auto start/stop could send the VTherm back to `off`. Restoring the switch on unload is still to do.
 
 **HomeShift migration**: HomeShift stops driving the switch of the VTherms managed by this plugin.
 Its thresholds move here.
+
+### 8.4 Start/stop threshold per mode
+
+The per-mode threshold says who decides. On its eco side, the switch is turned
+on and the engine is `INACTIVE` with reason `delegated`: VTherm's own algorithm switches the
+equipment fully off and on, which suits long eco periods such as nights. On the comfort side, the
+switch is turned off and the engine decides. The side is read on `requested_hvac_mode`, since the
+effective mode is `off` while VTherm's auto start/stop holds the equipment off.
+
+- The switch is found in the entity registry, under the thermostat's config entry, by a unique_id
+  ending in `_enable_auto_start_stop`. Without it (feature not configured), the engine decides on
+  both sides, in its eco profile below the threshold, and a warning is logged once.
+- A mode without a threshold never delegates: the switch stays off.
+- Written on transitions only (side change, first cycle), as HomeShift did: a flip by hand holds
+  until the next transition. Not blocking, since the switch updates the VTherm whose cycle is running.
+- Left alone while the plugin's own switch is off.
+- VTherm's stops are real stops: they feed the learning (§6.3).
 
 ## 9. Entities and diagnostics
 
@@ -359,7 +377,8 @@ nothing, VTherm's auto start/stop alone, the plugin.
 | 5 | Pause by `setback`. Clear the **[NOT VERIFIED]** of §8.1 with a trial | code **done**. One-day heating trial **to do** |
 | 6 | Entities, avoided energy. Event and CSV export | entities and energy **done**. Event and CSV **to do** |
 | 7 | Closed-loop bench, eco profile calibration | to do |
-| 8 | `inhibit`, `delegate`, switching the native auto start/stop off, HomeShift migration | to do |
+| 8 | Start/stop threshold per mode and ownership of the native switch (§8.4) | **done** |
+| 9 | `inhibit`, restoring the native switch on unload, HomeShift migration | to do |
 
 ## 13. Decisions
 

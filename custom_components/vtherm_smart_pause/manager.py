@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -59,9 +60,9 @@ from .const import (
     SAVE_INTERVAL_S,
     STORAGE_KEY,
     STORAGE_VERSION,
-    VTHERM_CONF_AUTO_START_STOP,
+    VTHERM_AUTO_START_STOP_SUFFIX,
 )
-from .decision import DRIVEN_HVAC_MODES, HVAC_COOL, HVAC_HEAT, Action, Decision, DecisionEngine, Inputs, Profile, Settings, State
+from .decision import DRIVEN_HVAC_MODES, HVAC_COOL, HVAC_HEAT, PROFILE_ECO, Action, Decision, DecisionEngine, Inputs, Profile, Settings, State
 from .forecast import WeatherForecast
 from .log import get_logger, write_event_log
 from .registry import add_entities_registry, managers, merged_config
@@ -139,6 +140,9 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self._recorder: SegmentRecorder | None = None
         self._pause_power_w: float | None = None
         self._last_cycle: float | None = None
+        #: What VTherm's auto start/stop switch was last set to (True: on), None until the first write.
+        self._native_applied: bool | None = None
+        self._native_missing_logged = False
         self._decision: Decision | None = None
         self._listeners: list = []
         self._entity_listeners: list = []
@@ -148,12 +152,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
     # ------------------------------------------------------------------
     def post_init(self, entry_infos: Any) -> None:
         """Publish the manager so the entity platforms can find it."""
-        if isinstance(entry_infos, dict) and entry_infos.get(VTHERM_CONF_AUTO_START_STOP):
-            _LOGGER.warning(
-                "%s - VTherm's own auto start/stop is enabled: it decides on its own when to switch the equipment off. "
-                "Disable it in the VTherm configuration so that only one of them decides.",
-                self,
-            )
+        del entry_infos
         managers(self._hass)[self._vtherm.unique_id] = self
 
     async def start_listening(self, force: bool = False) -> None:
@@ -305,6 +304,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             "limit": decision.limit if decision else None,
             "setback": self.setback(mode) if mode in DRIVEN_HVAC_MODES else None,
             "pauses_today": self.engine.pauses_today,
+            "vtherm_auto_start_stop": self._native_applied,
             "heat_loss": round(self.model.heat_loss(mode if mode in DRIVEN_HVAC_MODES else HVAC_HEAT), 4),
             "solar_gain": round(self.model.solar_gain(mode if mode in DRIVEN_HVAC_MODES else HVAC_HEAT), 3),
             "model_ready": self.model.is_ready(mode) if mode in DRIVEN_HVAC_MODES else False,
@@ -396,10 +396,76 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
                     power_w = number
         self._activity.add(now, power_w=power_w, energy_kwh=energy_kwh, running=self._is_on(CONF_COMPRESSOR_ENTITY))
 
-    def _inactive_reason(self) -> str | None:
+    def _native_switch(self) -> str | None:
+        """Entity id of VTherm's own auto start/stop switch, None when that feature is not configured.
+
+        VTherm creates it under the thermostat's config entry, whose entry_id is
+        the thermostat's unique_id, with a unique_id ending in ``_enable_auto_start_stop``.
+        """
+        registry = er.async_get(self._hass)
+        for entry in er.async_entries_for_config_entry(registry, self._vtherm.unique_id):
+            if entry.domain == "switch" and entry.unique_id.endswith(VTHERM_AUTO_START_STOP_SUFFIX):
+                return entry.entity_id
+        return None
+
+    def _eco_side(self) -> bool:
+        """Whether the user's setpoint is on the eco side of the threshold.
+
+        Read on the requested HVAC mode: once VTherm's auto start/stop has
+        switched the equipment off, the effective mode is ``off``.
+        """
+        mode = self._vtherm.requested_hvac_mode
+        if mode not in DRIVEN_HVAC_MODES:
+            mode = self._vtherm.vtherm_hvac_mode
+        setpoint = self._vtherm.target_temperature
+        if mode not in DRIVEN_HVAC_MODES or setpoint is None:
+            return False
+        return self.engine.profile_for(mode, setpoint)[0] == PROFILE_ECO
+
+    async def _async_drive_native(self, switch: str, delegated: bool) -> None:
+        """Turn VTherm's auto start/stop on when it decides, off when this plugin does.
+
+        Only one of them may decide. Written on transitions only, as HomeShift
+        did: a flip by hand holds until the next transition.
+        """
+        if delegated == self._native_applied:
+            return
+        state = self._hass.states.get(switch)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+        self._native_applied = delegated
+        if (state.state == STATE_ON) == delegated:
+            return
+        write_event_log(_LOGGER, self, f"VTherm auto start/stop {'enabled (eco, delegated)' if delegated else 'disabled (smart pause decides)'}")
+        # Not blocking: the switch updates this very VTherm, whose control cycle is running.
+        await self._hass.services.async_call("switch", "turn_on" if delegated else "turn_off", {"entity_id": switch}, blocking=False)
+
+    async def _async_delegation(self) -> bool:
+        """Drive VTherm's auto start/stop and return whether it decides this cycle.
+
+        It decides on the eco side of the mode's threshold, a mode without a
+        threshold never delegates. Without the switch (the feature is not
+        configured on the thermostat), the smart pause decides on both sides,
+        in its eco profile below the threshold.
+        """
+        if not self.enabled:
+            return False
+        switch = self._native_switch()
+        wanted = self._eco_side()
+        if switch is None:
+            if wanted and not self._native_missing_logged:
+                self._native_missing_logged = True
+                _LOGGER.warning("%s - a threshold is set, but VTherm's auto start/stop is not configured on this thermostat: smart pause decides", self)
+            return False
+        await self._async_drive_native(switch, wanted)
+        return wanted
+
+    def _inactive_reason(self, delegated: bool = False) -> str | None:
         """Why the engine must not decide this cycle, or None."""
         if not self.enabled:
             return "disabled"
+        if delegated:
+            return "delegated"
         if self._vtherm.hvac_off_reason == HVAC_OFF_REASON_WINDOW:
             return "window"
         if self._is_on(CONF_DEFROST_ENTITY):
@@ -461,6 +527,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             self.avoided_energy_kwh += self._pause_power_w * (now - self._last_cycle) / 3_600_000.0
         self._last_cycle = now
 
+        delegated = await self._async_delegation()
         driven = mode in DRIVEN_HVAC_MODES
         slope = vtherm.last_temperature_slope
         observed = slope if self.engine.state != State.PAUSED else None
@@ -471,7 +538,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             setpoint=vtherm.target_temperature,
             room=room,
             outdoor=outdoor,
-            inactive_reason=self._inactive_reason(),
+            inactive_reason=self._inactive_reason(delegated),
             activity=self._activity.is_active(),
             model_ready=self.model.is_ready(mode) if driven else False,
             recovery_minutes=self.model.recovery_minutes(mode) if driven else 30.0,

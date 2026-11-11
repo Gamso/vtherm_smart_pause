@@ -6,16 +6,16 @@
         "description": "Pause the equipment of an over_climate thermostat while the room does not need it and will hold without it.",
         "data": {
           "target_vtherm": "Versatile Thermostat",
-          "threshold_heat": "Heating: comfort profile from this setpoint",
-          "threshold_cool": "Cooling: comfort profile up to this setpoint",
+          "threshold_heat": "Heating: start/stop threshold",
+          "threshold_cool": "Cooling: start/stop threshold",
           "weather_entity": "Weather forecast",
           "power_entity": "Power or energy of the equipment",
           "compressor_entity": "Compressor running",
           "defrost_entity": "Defrost or preheating"
         },
         "data_description": {
-          "threshold_heat": "A setpoint at or above it uses the comfort profile (tight margins), below it the eco profile. Empty: always comfort.",
-          "threshold_cool": "A setpoint at or below it uses the comfort profile, above it the eco profile. Empty: always comfort.",
+          "threshold_heat": "Below this setpoint, VTherm's own auto start/stop switches the equipment off and on. From this setpoint up, the smart pause decides. Empty: the smart pause always decides.",
+          "threshold_cool": "Above this setpoint, VTherm's own auto start/stop switches the equipment off and on. From this setpoint down, the smart pause decides. Empty: the smart pause always decides.",
           "weather_entity": "Hourly forecast of the outdoor temperature and the clouds, used to predict how long the room holds.",
           "power_entity": "Optional. Lets the plugin pause only an equipment that consumes, and estimate the energy avoided. A delayed energy counter works too.",
           "compressor_entity": "Optional. On while the compressor runs.",
@@ -36,8 +36,8 @@
       "init": {
         "title": "Smart pause options",
         "data": {
-          "threshold_heat": "Heating: comfort profile from this setpoint",
-          "threshold_cool": "Cooling: comfort profile up to this setpoint",
+          "threshold_heat": "Heating: start/stop threshold",
+          "threshold_cool": "Cooling: start/stop threshold",
           "weather_entity": "Weather forecast",
           "power_entity": "Power or energy of the equipment",
           "compressor_entity": "Compressor running",
@@ -61,7 +61,9 @@
         "data_description": {
           "setback_heat": "Setpoint sent while paused. Empty: the thermostat's minimum temperature.",
           "setback_cool": "Setpoint sent while paused. Empty: the thermostat's maximum temperature.",
-          "comfort_margin": "The pause ends before the room passes the setpoint by this much on the uncomfortable side."
+          "comfort_margin": "The pause ends before the room passes the setpoint by this much on the uncomfortable side.",
+          "threshold_heat": "Below this setpoint, VTherm's own auto start/stop switches the equipment off and on. From this setpoint up, the smart pause decides. Empty: the smart pause always decides.",
+          "threshold_cool": "Above this setpoint, VTherm's own auto start/stop switches the equipment off and on. From this setpoint down, the smart pause decides. Empty: the smart pause always decides."
         }
       }
     }

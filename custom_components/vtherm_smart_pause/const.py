@@ -9,8 +9,8 @@ DEVICE_NAME = "Versatile Thermostat Smart Pause"
 VTHERM_DOMAIN = "versatile_thermostat"
 CONF_THERMOSTAT_TYPE = "thermostat_type"
 CONF_THERMOSTAT_CLIMATE = "thermostat_over_climate"
-#: VTherm's own option for its built-in auto start/stop.
-VTHERM_CONF_AUTO_START_STOP = "use_auto_start_stop_feature"
+#: Suffix of the unique_id of VTherm's own auto start/stop switch (``<device name>_enable_auto_start_stop``).
+VTHERM_AUTO_START_STOP_SUFFIX = "_enable_auto_start_stop"
 #: VTherm reports this reason when a window opening switched it off.
 HVAC_OFF_REASON_WINDOW = "hvac_off_window_detection"
 #: Command cause VTherm passes when it follows a change made on the device itself.
@@ -18,6 +18,8 @@ COMMAND_CAUSE_UNDERLYING_TRACKING = "underlying_tracking"
 
 # Configuration keys
 CONF_TARGET_VTHERM = "target_vtherm"  # unique_id of the VTherm this plugin drives
+#: Per-mode setpoint threshold. On its eco side VTherm's own auto start/stop decides, on its
+#: comfort side the smart pause. Empty: the smart pause always decides, in the comfort profile.
 CONF_THRESHOLD_HEAT = "threshold_heat"
 CONF_THRESHOLD_COOL = "threshold_cool"
 CONF_WEATHER_ENTITY = "weather_entity"

@@ -43,13 +43,28 @@ safety mode) and takes over again at once when the plugin lets go.
 
 Heating and cooling are handled the same way, mirrored.
 
+### Start/stop threshold per mode
+
+A setpoint threshold per HVAC mode says who decides, as HomeShift's threshold did:
+
+| Setpoint (heating) | Who decides | VTherm's `enable_auto_start_stop` switch |
+|---|---|---|
+| below `threshold_heat` (e.g. a 17.5 °C night setback) | VTherm's own auto start/stop: it switches the equipment fully off and on | turned **on** |
+| at or above `threshold_heat` | the smart pause, comfort profile | turned **off** |
+
+Cooling mirrors it with `threshold_cool`: VTherm decides above it, the smart pause at or below it.
+A mode without a threshold never delegates: the smart pause always decides there and VTherm's switch
+stays off, so only one of them decides.
+
+The switch is only written when the side changes (and once at start), so a flip by hand holds until
+the next change. It needs the auto start/stop feature configured on the thermostat. Without it, the
+smart pause decides on both sides, in its eco profile below the threshold.
+
 ### Profiles
 
-A setpoint threshold per mode picks one of two profiles:
-
-| | Comfort | Eco |
+| | Comfort | Eco (fallback) |
 |---|---|---|
-| When | heating setpoint at or above `threshold_heat` (cooling: at or below `threshold_cool`), or no threshold set | the other side of the threshold |
+| When | comfort side of the threshold, or no threshold set | eco side, only when VTherm's auto start/stop is not configured |
 | Excess needed before a pause | 0.3 °C for 20 min | 0.2 °C for 10 min |
 | Comfort limit (setpoint ∓ margin) | 0.3 °C | 1.0 °C |
 | Predicted autonomy needed | 60 min | 30 min |
@@ -77,15 +92,15 @@ in heating below −5 °C outside or in cooling above 40 °C. All of them are op
 2. Restart Home Assistant.
 3. **Settings → Devices & services → Add integration → Versatile Thermostat Smart Pause**, pick the
    thermostat.
-4. Turn VTherm's own auto start/stop off on that thermostat: two deciders would fight. The plugin
-   logs a warning while it is on.
+4. If HomeShift drives that thermostat's auto start/stop switch, remove it there: the smart pause
+   owns the switch now (see Start/stop threshold per mode).
 
 ## Configuration
 
 | Option | Meaning |
 |---|---|
 | Versatile Thermostat | The `over_climate` thermostat to pause (one entry per thermostat). |
-| Comfort thresholds | Heating: comfort profile from this setpoint up. Cooling: comfort profile from this setpoint down. Empty: always comfort. |
+| Heating / cooling start/stop threshold | Heating: below it VTherm's auto start/stop decides, from it up the smart pause. Cooling: above it VTherm decides, from it down the smart pause. Empty: the smart pause always decides in that mode. |
 | Weather forecast | Hourly forecast of outdoor temperature and clouds. Without it the outdoor temperature is assumed constant. |
 | Power or energy of the equipment | Optional. A power sensor (W, kW) or an energy counter (Wh, kWh), even a delayed one. Pauses only an equipment that draws power, and estimates the avoided energy. |
 | Compressor running | Optional. On while the compressor runs. Pauses only a running equipment. A pause during which it still runs teaches nothing. |
@@ -113,7 +128,7 @@ during a pause.
 ## Limits of this version
 
 - Pauses by setback only. The full stop (VTherm inhibition) is planned.
-- VTherm's own auto start/stop is not switched off automatically.
+- VTherm's auto start/stop switch is not restored to its previous state when the plugin is removed.
 - The model learns from scratch: no bootstrap from the recorder history yet. The comfort profile
   starts after three nights with the thermostat off.
 - Not yet checked on hardware: that VTherm sends the setback when its self-regulation is set to
