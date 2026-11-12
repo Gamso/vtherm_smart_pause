@@ -230,7 +230,7 @@ What follows was read in the code of `vtherm_api` 0.9.0 and VTherm (`main`, 10.6
 - `None` keeps the setpoint. A number replaces it. `NaN`, a boolean, a coroutine or an exception are
   ignored with a warning.
 - The send may be **deferred**: a change below `dtemp` is swallowed, the self-regulation period is
-  respected (20 s delay). v0.1.0 lets the pause take effect on VTherm's next regulation, within one
+  respected (20 s delay). The plugin lets the pause take effect on VTherm's next regulation, within one
   cycle.
 - Also called when self-regulation is "none" **[NOT VERIFIED]**: to test, otherwise document that
   `setback` needs an active self-regulation.
@@ -367,7 +367,7 @@ nothing, VTherm's auto start/stop alone, the plugin.
 
 | # | Content | Status |
 |---|---|---|
-| 1 | Skeleton: factory, registry, config flow, manager, CI | **done** (v0.1.0) |
+| 1 | Skeleton: factory, registry, config flow, manager, CI | **done** |
 | 2 | `thermal_model.py`, `k` / autonomy sensors. Bootstrap from history | **done**, except the bootstrap |
 | 3 | `forecast.py` | **done** |
 | 4 | `decision.py` + replay | **done** |
@@ -385,7 +385,7 @@ mirroring heating, then on a real export next summer.
 
 **Equipment entities dropped.** Earlier drafts read an optional power or energy sensor, a compressor
 entity and a defrost entity, to avoid pausing an equipment that was already idle and to estimate the
-energy saved. Not every installation has them, so v0.1.x reads none. Consequences: a pause may start
+energy saved. Not every installation has them, so the plugin (from 0.2.0) reads none. Consequences: a pause may start
 on an equipment already in thermo-off (no gain, no harm), and a pause that does not really stop the
 compressor lengthens the learned autonomy a little, while the pause still ends on comfort. A defrost
 is detected from VTherm's own `hvac_action`.
