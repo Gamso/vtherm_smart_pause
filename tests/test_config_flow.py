@@ -4,7 +4,23 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant.common import MockConfigEntry
 
-from custom_components.vtherm_smart_pause.const import CONF_TARGET_VTHERM, CONF_THRESHOLD_HEAT, CONF_WEATHER_ENTITY, DOMAIN, VTHERM_DOMAIN
+from custom_components.vtherm_smart_pause.const import (
+    CONF_COMFORT_EXCESS,
+    CONF_COMFORT_MARGIN,
+    CONF_MAX_PAUSES_PER_DAY,
+    CONF_SETBACK_HEAT,
+    CONF_TARGET_VTHERM,
+    CONF_THRESHOLD_HEAT,
+    CONF_WEATHER_ENTITY,
+    DOMAIN,
+    SECTION_FALLBACK_RULES,
+    SECTION_GUARDS,
+    SECTION_PAUSE_RULES,
+    SECTION_SETBACK,
+    SECTIONS,
+    VTHERM_DOMAIN,
+)
+from custom_components.vtherm_smart_pause.manager import settings_from_config
 from custom_components.vtherm_smart_pause.registry import merged_config
 
 
@@ -54,9 +70,38 @@ async def test_options_replace_the_data(integration):
     entry.add_to_hass(integration)
     result = await integration.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.FORM
-    result = await integration.config_entries.options.async_configure(result["flow_id"], {CONF_THRESHOLD_HEAT: 19.5})
+    result = await integration.config_entries.options.async_configure(result["flow_id"], {CONF_THRESHOLD_HEAT: 19.5, **{name: {} for name in SECTIONS}})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     conf = merged_config(entry)
     assert conf[CONF_TARGET_VTHERM] == "vtherm-salon"
     assert conf[CONF_THRESHOLD_HEAT] == 19.5
     assert CONF_WEATHER_ENTITY not in conf
+
+
+async def test_sections_are_stored_nested_and_read_flat(integration):
+    """The form's sections come back as flat settings, with the defaults of untouched fields."""
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_TARGET_VTHERM: "vtherm-salon"})
+    entry.add_to_hass(integration)
+    result = await integration.config_entries.options.async_init(entry.entry_id)
+    user_input = {
+        SECTION_PAUSE_RULES: {CONF_COMFORT_MARGIN: 0.5},
+        SECTION_SETBACK: {CONF_SETBACK_HEAT: 12.0},
+        SECTION_GUARDS: {CONF_MAX_PAUSES_PER_DAY: 4},
+        SECTION_FALLBACK_RULES: {},
+    }
+    result = await integration.config_entries.options.async_configure(result["flow_id"], user_input)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[SECTION_PAUSE_RULES][CONF_COMFORT_MARGIN] == 0.5
+    conf = merged_config(entry)
+    assert conf[CONF_COMFORT_MARGIN] == 0.5
+    assert conf[CONF_SETBACK_HEAT] == 12.0
+    assert conf[CONF_MAX_PAUSES_PER_DAY] == 4
+    assert conf[CONF_COMFORT_EXCESS] == 0.3
+    assert settings_from_config(conf).comfort.margin == 0.5
+    assert settings_from_config(conf).max_pauses_per_day == 4
+
+
+async def test_flat_options_of_an_older_form_still_read(integration):
+    """Options stored flat, before the sections existed, are read as they were."""
+    entry = MockConfigEntry(domain=DOMAIN, data={CONF_TARGET_VTHERM: "vtherm-salon"}, options={CONF_COMFORT_MARGIN: 0.4})
+    assert settings_from_config(merged_config(entry)).comfort.margin == 0.4

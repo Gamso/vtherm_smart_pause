@@ -69,6 +69,10 @@ smart pause decides on both sides, with its fallback rules below the threshold.
 
 ### What the settings mean
 
+The options form shows the start/stop thresholds and the weather forecast first, then four
+sections: **Pause rules** (open), **Setpoint sent while paused**, **Compressor protection** and
+**Fallback rules** (collapsed).
+
 **Pause rules.** They apply when the smart pause decides.
 
 | Setting | Meaning | Default |
@@ -89,7 +93,7 @@ cooling. Leave it empty unless your unit keeps heating at that value.
 The defaults of the pause rules were calibrated by replaying the ten days of measurements
 ([study](docs/study.md), §8).
 
-### Compressor guards
+### Compressor protection
 
 At least 15 min of run after a resume, at least 20 min of pause, at most 8 pauses a day, no pause
 in heating below −5 °C outside or in cooling above 40 °C. All of them are options.
@@ -120,7 +124,7 @@ A defrost reported by VTherm ends a pause and stops the decisions.
 | Versatile Thermostat | The `over_climate` thermostat to pause (one entry per thermostat). |
 | Heating / cooling start/stop threshold | Heating: below it VTherm's auto start/stop decides, from it up the smart pause. Cooling: above it VTherm decides, from it down the smart pause. Empty: the smart pause always decides in that mode. |
 | Weather forecast | Optional. Hourly forecast of outdoor temperature and clouds. Without it the outdoor temperature is assumed constant. |
-| Pause and fallback rules, setback, compressor guards (options) | See the sections above. |
+| Pause rules, setpoint sent while paused, compressor protection, fallback rules (options) | Collapsible sections of the options form, see the sections above. |
 
 ## Entities
 

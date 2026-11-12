@@ -78,6 +78,12 @@ VTherm as `off` and is not lifted by a user action (§8.2).
 
 ### 4.2 Options (per profile)
 
+The options form groups the fields in sections (Home Assistant `section`): the thresholds and the
+forecast on top, then **Pause rules** (open), **Setpoint sent while paused**, **Compressor
+protection** and **Fallback rules** (collapsed). Home Assistant stores the section fields nested
+under the section's key, `registry.merged_config` reads them back flat, flat options of an older
+form included.
+
 | Parameter | Eco | Comfort | Meaning |
 |---|---|---|---|
 | `excess` (δ) | 0.2 °C | 0.3 °C | minimum excess over the setpoint |

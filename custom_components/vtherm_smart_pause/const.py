@@ -23,6 +23,15 @@ CONF_TARGET_VTHERM = "target_vtherm"  # unique_id of the VTherm this plugin driv
 CONF_THRESHOLD_HEAT = "threshold_heat"
 CONF_THRESHOLD_COOL = "threshold_cool"
 CONF_WEATHER_ENTITY = "weather_entity"
+
+#: Sections of the options form. Home Assistant stores their fields nested under these
+#: keys, ``registry.merged_config`` flattens them back.
+SECTION_PAUSE_RULES = "pause_rules"
+SECTION_SETBACK = "setback"
+SECTION_GUARDS = "guards"
+SECTION_FALLBACK_RULES = "fallback_rules"
+SECTIONS = (SECTION_PAUSE_RULES, SECTION_SETBACK, SECTION_GUARDS, SECTION_FALLBACK_RULES)
+
 CONF_SETBACK_HEAT = "setback_heat"
 CONF_SETBACK_COOL = "setback_cool"
 CONF_COMFORT_EXCESS = "comfort_excess"

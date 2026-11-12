@@ -32,37 +32,71 @@
         "data": {
           "threshold_heat": "Heating: start/stop threshold (°C)",
           "threshold_cool": "Cooling: start/stop threshold (°C)",
-          "weather_entity": "Weather forecast",
-          "setback_heat": "Heating: setpoint sent while paused (°C)",
-          "setback_cool": "Cooling: setpoint sent while paused (°C)",
-          "comfort_excess": "Main rules: excess before pausing (°C)",
-          "comfort_excess_minutes": "Main rules: how long the excess must last (min)",
-          "comfort_margin": "Main rules: comfort margin (°C)",
-          "comfort_min_pause_minutes": "Main rules: minimum autonomy to pause (min)",
-          "eco_excess": "Fallback rules: excess before pausing (°C)",
-          "eco_excess_minutes": "Fallback rules: how long the excess must last (min)",
-          "eco_margin": "Fallback rules: comfort margin (°C)",
-          "eco_min_pause_minutes": "Fallback rules: minimum autonomy to pause (min)",
-          "min_run_minutes": "Minimum run after a resume (min)",
-          "min_off_minutes": "Minimum pause (min)",
-          "max_pauses_per_day": "Maximum pauses per day",
-          "outdoor_floor_heat": "Heating: no pause below this outdoor temperature (°C)",
-          "outdoor_ceiling_cool": "Cooling: no pause above this outdoor temperature (°C)"
+          "weather_entity": "Weather forecast"
         },
         "data_description": {
           "threshold_heat": "Below this setpoint (for example a night setback), VTherm's own auto start/stop switches the equipment off and on. From this setpoint up, the smart pause decides. Empty: the smart pause always decides.",
           "threshold_cool": "Above this setpoint, VTherm's own auto start/stop switches the equipment off and on. From this setpoint down, the smart pause decides. Empty: the smart pause always decides.",
-          "weather_entity": "Optional. Hourly forecast of the outdoor temperature and the clouds, used to predict how long the room holds without the equipment.",
-          "setback_heat": "While paused, the equipment receives this low setpoint, so its own thermostat stops the compressor and the unit stays on. Empty: the thermostat's minimum temperature.",
-          "setback_cool": "While paused, the equipment receives this high setpoint, so its own thermostat stops the compressor and the unit stays on. Empty: the thermostat's maximum temperature.",
-          "comfort_excess": "Pause only when the room is at least this far past the setpoint (above it in heating, below it in cooling). With a room sensor that moves by 0.2 °C, 0.3 means a 0.4 °C excess.",
-          "comfort_excess_minutes": "The excess must last this long before a pause.",
-          "comfort_margin": "The comfort limit: the room must not go further than this on the uncomfortable side of the setpoint (below it in heating). The pause ends at half this margin, or earlier when the model predicts the limit will be reached.",
-          "comfort_min_pause_minutes": "Pause only if the model predicts the room will hold at least this long without the equipment.",
-          "eco_excess": "The fallback rules apply on the eco side of a threshold only when VTherm's auto start/stop is not configured on the thermostat. Same meaning as the main rules, with wider margins.",
-          "min_run_minutes": "After a resume, the equipment runs at least this long before the next pause.",
-          "min_off_minutes": "A pause lasts at least this long, unless comfort calls for an earlier resume.",
-          "max_pauses_per_day": "Protects the compressor from too many stops and starts."
+          "weather_entity": "Optional. Hourly forecast of the outdoor temperature and the clouds, used to predict how long the room holds without the equipment."
+        },
+        "sections": {
+          "pause_rules": {
+            "name": "Pause rules",
+            "description": "When the smart pause decides: the comfort side of a start/stop threshold, or a mode without a threshold.",
+            "data": {
+              "comfort_excess": "Excess before pausing (°C)",
+              "comfort_excess_minutes": "How long the excess must last (min)",
+              "comfort_margin": "Comfort margin (°C)",
+              "comfort_min_pause_minutes": "Minimum autonomy to pause (min)"
+            },
+            "data_description": {
+              "comfort_excess": "Pause only when the room is at least this far past the setpoint (above it in heating, below it in cooling). With a room sensor that moves by 0.2 °C, 0.3 means a 0.4 °C excess.",
+              "comfort_excess_minutes": "The excess must last this long before a pause.",
+              "comfort_margin": "The comfort limit: the room must not go further than this on the uncomfortable side of the setpoint (below it in heating). The pause ends at half this margin, or earlier when the model predicts the limit will be reached.",
+              "comfort_min_pause_minutes": "Pause only if the model predicts the room will hold at least this long without the equipment."
+            }
+          },
+          "setback": {
+            "name": "Setpoint sent while paused",
+            "description": "What the equipment receives during a pause. Leave both empty unless your unit keeps running at the thermostat's minimum (heating) or maximum (cooling).",
+            "data": {
+              "setback_heat": "Heating (°C)",
+              "setback_cool": "Cooling (°C)"
+            },
+            "data_description": {
+              "setback_heat": "While paused, the equipment receives this low setpoint, so its own thermostat stops the compressor and the unit stays on. Empty: the thermostat's minimum temperature.",
+              "setback_cool": "While paused, the equipment receives this high setpoint, so its own thermostat stops the compressor and the unit stays on. Empty: the thermostat's maximum temperature."
+            }
+          },
+          "guards": {
+            "name": "Compressor protection",
+            "description": "Limits that keep the equipment from stopping and starting too often.",
+            "data": {
+              "min_run_minutes": "Minimum run after a resume (min)",
+              "min_off_minutes": "Minimum pause (min)",
+              "max_pauses_per_day": "Maximum pauses per day",
+              "outdoor_floor_heat": "Heating: no pause below this outdoor temperature (°C)",
+              "outdoor_ceiling_cool": "Cooling: no pause above this outdoor temperature (°C)"
+            },
+            "data_description": {
+              "min_run_minutes": "After a resume, the equipment runs at least this long before the next pause.",
+              "min_off_minutes": "A pause lasts at least this long, unless comfort calls for an earlier resume.",
+              "max_pauses_per_day": "Protects the compressor from too many stops and starts."
+            }
+          },
+          "fallback_rules": {
+            "name": "Fallback rules",
+            "description": "Used only on the eco side of a threshold when VTherm's auto start/stop is not configured on the thermostat. Ignore them otherwise.",
+            "data": {
+              "eco_excess": "Excess before pausing (°C)",
+              "eco_excess_minutes": "How long the excess must last (min)",
+              "eco_margin": "Comfort margin (°C)",
+              "eco_min_pause_minutes": "Minimum autonomy to pause (min)"
+            },
+            "data_description": {
+              "eco_excess": "Same meaning as the pause rules, with wider margins."
+            }
+          }
         }
       }
     }
