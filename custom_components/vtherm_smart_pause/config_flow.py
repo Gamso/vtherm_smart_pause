@@ -8,6 +8,7 @@ import voluptuous as vol
 from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
@@ -16,8 +17,6 @@ from .const import (
     CONF_COMFORT_EXCESS_MINUTES,
     CONF_COMFORT_MARGIN,
     CONF_COMFORT_MIN_PAUSE,
-    CONF_COMPRESSOR_ENTITY,
-    CONF_DEFROST_ENTITY,
     CONF_ECO_EXCESS,
     CONF_ECO_EXCESS_MINUTES,
     CONF_ECO_MARGIN,
@@ -27,7 +26,6 @@ from .const import (
     CONF_MIN_RUN_MINUTES,
     CONF_OUTDOOR_CEILING_COOL,
     CONF_OUTDOOR_FLOOR_HEAT,
-    CONF_POWER_ENTITY,
     CONF_SETBACK_COOL,
     CONF_SETBACK_HEAT,
     CONF_TARGET_VTHERM,
@@ -37,6 +35,10 @@ from .const import (
     CONF_THRESHOLD_HEAT,
     CONF_WEATHER_ENTITY,
     DOMAIN,
+    SECTION_FALLBACK_RULES,
+    SECTION_GUARDS,
+    SECTION_PAUSE_RULES,
+    SECTION_SETBACK,
     VTHERM_DOMAIN,
 )
 from .decision import Settings
@@ -67,31 +69,28 @@ def _entities_schema(defaults: dict[str, Any]) -> dict:
         _optional(CONF_THRESHOLD_HEAT, defaults): _temperature(5, 35),
         _optional(CONF_THRESHOLD_COOL, defaults): _temperature(15, 35),
         _optional(CONF_WEATHER_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
-        _optional(CONF_POWER_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class=["power", "energy"])),
-        _optional(CONF_COMPRESSOR_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch", "input_boolean"])),
-        _optional(CONF_DEFROST_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "input_boolean"])),
     }
 
 
-def _tuning_schema(defaults: dict[str, Any]) -> dict:
-    """Setback, profile margins and compressor guards (options only)."""
+def _sections_schema(defaults: dict[str, Any]) -> dict:
+    """The options form's sections: pause rules, setpoint while paused, compressor guards, fallback rules."""
 
     def with_default(key: str, value: float) -> vol.Optional:
         return vol.Optional(key, default=defaults.get(key, value))
 
     comfort, eco = _DEFAULTS.comfort, _DEFAULTS.eco
     margin = selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=3, step=0.1, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX))
-    return {
-        _optional(CONF_SETBACK_HEAT, defaults): _temperature(5, 25),
-        _optional(CONF_SETBACK_COOL, defaults): _temperature(20, 35),
+    pause_rules = {
         with_default(CONF_COMFORT_EXCESS, comfort.excess): margin,
         with_default(CONF_COMFORT_EXCESS_MINUTES, comfort.excess_minutes): _minutes(240),
         with_default(CONF_COMFORT_MARGIN, comfort.margin): margin,
         with_default(CONF_COMFORT_MIN_PAUSE, comfort.min_pause_minutes): _minutes(360),
-        with_default(CONF_ECO_EXCESS, eco.excess): margin,
-        with_default(CONF_ECO_EXCESS_MINUTES, eco.excess_minutes): _minutes(240),
-        with_default(CONF_ECO_MARGIN, eco.margin): margin,
-        with_default(CONF_ECO_MIN_PAUSE, eco.min_pause_minutes): _minutes(360),
+    }
+    setback = {
+        _optional(CONF_SETBACK_HEAT, defaults): _temperature(5, 25),
+        _optional(CONF_SETBACK_COOL, defaults): _temperature(20, 35),
+    }
+    guards = {
         with_default(CONF_MIN_RUN_MINUTES, _DEFAULTS.min_run_minutes): _minutes(240),
         with_default(CONF_MIN_OFF_MINUTES, _DEFAULTS.min_off_minutes): _minutes(240),
         with_default(CONF_MAX_PAUSES_PER_DAY, _DEFAULTS.max_pauses_per_day): selector.NumberSelector(
@@ -99,6 +98,18 @@ def _tuning_schema(defaults: dict[str, Any]) -> dict:
         ),
         with_default(CONF_OUTDOOR_FLOOR_HEAT, _DEFAULTS.outdoor_floor_heat): _temperature(-30, 20),
         with_default(CONF_OUTDOOR_CEILING_COOL, _DEFAULTS.outdoor_ceiling_cool): _temperature(20, 50),
+    }
+    fallback_rules = {
+        with_default(CONF_ECO_EXCESS, eco.excess): margin,
+        with_default(CONF_ECO_EXCESS_MINUTES, eco.excess_minutes): _minutes(240),
+        with_default(CONF_ECO_MARGIN, eco.margin): margin,
+        with_default(CONF_ECO_MIN_PAUSE, eco.min_pause_minutes): _minutes(360),
+    }
+    return {
+        vol.Required(SECTION_PAUSE_RULES): section(vol.Schema(pause_rules), {"collapsed": False}),
+        vol.Required(SECTION_SETBACK): section(vol.Schema(setback), {"collapsed": True}),
+        vol.Required(SECTION_GUARDS): section(vol.Schema(guards), {"collapsed": True}),
+        vol.Required(SECTION_FALLBACK_RULES): section(vol.Schema(fallback_rules), {"collapsed": True}),
     }
 
 
@@ -157,4 +168,4 @@ class SmartPauseOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
         current = merged_config(self.config_entry)
-        return self.async_show_form(step_id="init", data_schema=vol.Schema({**_entities_schema(current), **_tuning_schema(current)}))
+        return self.async_show_form(step_id="init", data_schema=vol.Schema({**_entities_schema(current), **_sections_schema(current)}))

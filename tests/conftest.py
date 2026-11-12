@@ -1,6 +1,6 @@
 """Shared fixtures.
 
-The pure modules (decision, thermal model, activity, solar, replay) need no
+The pure modules (decision, thermal model, solar, replay) need no
 event loop. The Home Assistant tests use the ``hass`` fixture of
 pytest-homeassistant through ``integration`` below, which also fails a test
 when Home Assistant logs a deprecation for this integration: 2026.11 is the

@@ -17,23 +17,19 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.components.climate import HVACAction
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .activity import ActivityTracker
 from .const import (
-    ACTIVITY_MIN_POWER_W,
-    ACTIVITY_WINDOW_S,
     ATTR_SECTION,
     COMMAND_CAUSE_UNDERLYING_TRACKING,
     CONF_COMFORT_EXCESS,
     CONF_COMFORT_EXCESS_MINUTES,
     CONF_COMFORT_MARGIN,
     CONF_COMFORT_MIN_PAUSE,
-    CONF_COMPRESSOR_ENTITY,
-    CONF_DEFROST_ENTITY,
     CONF_ECO_EXCESS,
     CONF_ECO_EXCESS_MINUTES,
     CONF_ECO_MARGIN,
@@ -43,7 +39,6 @@ from .const import (
     CONF_MIN_RUN_MINUTES,
     CONF_OUTDOOR_CEILING_COOL,
     CONF_OUTDOOR_FLOOR_HEAT,
-    CONF_POWER_ENTITY,
     CONF_SETBACK_COOL,
     CONF_SETBACK_HEAT,
     CONF_TARGET_VTHERM,
@@ -72,8 +67,6 @@ if TYPE_CHECKING:
     from vtherm_api.interfaces import InterfaceThermostatRuntime
 
 _LOGGER = get_logger(__name__)
-
-_ON_STATES = {STATE_ON, "true", "running", "heating", "cooling", "defrosting"}
 
 
 def settings_from_config(conf: dict[str, Any]) -> Settings:
@@ -132,14 +125,10 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self.model = ThermalModel()
         self.engine = DecisionEngine()
         self.enabled = True
-        self.avoided_energy_kwh = 0.0
         self._forecast: WeatherForecast | None = None
-        self._activity = ActivityTracker(ACTIVITY_WINDOW_S, ACTIVITY_MIN_POWER_W)
         self._resolution = SensorResolution()
         self._recovery = RecoveryTracker()
         self._recorder: SegmentRecorder | None = None
-        self._pause_power_w: float | None = None
-        self._last_cycle: float | None = None
         #: What VTherm's auto start/stop switch was last set to (True: on), None until the first write.
         self._native_applied: bool | None = None
         self._native_missing_logged = False
@@ -243,11 +232,6 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         """The last decision."""
         return self._decision
 
-    @property
-    def has_energy_source(self) -> bool:
-        """Whether a power or energy entity is configured."""
-        return bool(self._conf.get(CONF_POWER_ENTITY))
-
     def setback(self, hvac_mode: str) -> float:
         """The setpoint sent while paused: configured, else the VTherm's own limit."""
         key, attribute, fallback = (CONF_SETBACK_HEAT, "min_temp", FALLBACK_SETBACK_HEAT) if hvac_mode == HVAC_HEAT else (CONF_SETBACK_COOL, "max_temp", FALLBACK_SETBACK_COOL)
@@ -342,7 +326,6 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self.model = ThermalModel.from_dict(data.get("model"))
         self.engine.restore(data.get("engine"))
         self.enabled = bool(data.get("enabled", True))
-        self.avoided_energy_kwh = float(data.get("avoided_energy_kwh") or 0.0)
         self._loaded = True
         _LOGGER.info("%s - loaded (%d learned segments, state %s)", self, len(self.model.segments), self.engine.state)
 
@@ -355,47 +338,12 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
                 "model": self.model.to_dict(),
                 "engine": self.engine.to_dict(),
                 "enabled": self.enabled,
-                "avoided_energy_kwh": self.avoided_energy_kwh,
             }
         )
 
     # ------------------------------------------------------------------
     # The cycle
     # ------------------------------------------------------------------
-    def _entity_value(self, key: str) -> tuple[str | None, dict]:
-        """Return the state and attributes of a configured entity, or (None, {})."""
-        entity_id = self._conf.get(key)
-        state = self._hass.states.get(entity_id) if entity_id else None
-        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            return None, {}
-        return state.state, dict(state.attributes)
-
-    def _is_on(self, key: str) -> bool | None:
-        """Whether a configured on/off entity is on, None when absent or unknown."""
-        value, _ = self._entity_value(key)
-        return None if value is None else value.lower() in _ON_STATES
-
-    def _read_activity(self, now: float) -> None:
-        """Feed the activity tracker from the optional entities."""
-        value, attributes = self._entity_value(CONF_POWER_ENTITY)
-        power_w = energy_kwh = None
-        if value is not None:
-            try:
-                number = float(value)
-            except ValueError:
-                number = None
-            unit = str(attributes.get("unit_of_measurement") or "W")
-            if number is not None:
-                if unit == "kW":
-                    power_w = number * 1000.0
-                elif unit == "kWh":
-                    energy_kwh = number
-                elif unit == "Wh":
-                    energy_kwh = number / 1000.0
-                else:
-                    power_w = number
-        self._activity.add(now, power_w=power_w, energy_kwh=energy_kwh, running=self._is_on(CONF_COMPRESSOR_ENTITY))
-
     def _native_switch(self) -> str | None:
         """Entity id of VTherm's own auto start/stop switch, None when that feature is not configured.
 
@@ -468,7 +416,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             return "delegated"
         if self._vtherm.hvac_off_reason == HVAC_OFF_REASON_WINDOW:
             return "window"
-        if self._is_on(CONF_DEFROST_ENTITY):
+        if self._vtherm.hvac_action == HVACAction.DEFROSTING:
             return "defrost"
         if self._vtherm.is_overpowering_detected:
             return "overpowering"
@@ -477,16 +425,14 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
     def _learn(self, now: float, room: float | None, outdoor: float | None, sun: float) -> None:
         """Record the stretches with the equipment really stopped and learn from them.
 
-        A stop is VTherm off (not for a window) or a pause of this plugin while
-        the compressor entity, when configured, confirms it is idle. Its HVAC
-        mode is what the physics says: heating when outside is colder.
+        A stop is VTherm off (not for a window, nor while it defrosts) or a pause
+        of this plugin. Its HVAC mode is what the physics says: heating when
+        outside is colder.
         """
         mode = self._vtherm.vtherm_hvac_mode
         off_reason = self._vtherm.hvac_off_reason
-        stopped = (mode not in DRIVEN_HVAC_MODES and off_reason != HVAC_OFF_REASON_WINDOW) or (
-            self.engine.state == State.PAUSED and self._is_on(CONF_COMPRESSOR_ENTITY) is not True
-        )
-        if stopped and not self._is_on(CONF_DEFROST_ENTITY):
+        stopped = (mode not in DRIVEN_HVAC_MODES and off_reason != HVAC_OFF_REASON_WINDOW) or self.engine.state == State.PAUSED
+        if stopped and self._vtherm.hvac_action != HVACAction.DEFROSTING:
             if self._recorder is None and room is not None and outdoor is not None:
                 self._recorder = SegmentRecorder(HVAC_HEAT if outdoor < room else HVAC_COOL, now)
             if self._recorder is not None:
@@ -517,15 +463,10 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             outdoor = weather_at(now)[0]
         sun = weather_at(now)[1]
         self._learn(now, room, outdoor, sun)
-        self._read_activity(now)
 
         found = self._recovery.update(now, room, self._resolution.value)
         if found is not None:
             self.model.add_recovery(*found)
-
-        if self.engine.state == State.PAUSED and self._last_cycle is not None and self._pause_power_w:
-            self.avoided_energy_kwh += self._pause_power_w * (now - self._last_cycle) / 3_600_000.0
-        self._last_cycle = now
 
         delegated = await self._async_delegation()
         driven = mode in DRIVEN_HVAC_MODES
@@ -539,7 +480,6 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             room=room,
             outdoor=outdoor,
             inactive_reason=self._inactive_reason(delegated),
-            activity=self._activity.is_active(),
             model_ready=self.model.is_ready(mode) if driven else False,
             recovery_minutes=self.model.recovery_minutes(mode) if driven else 30.0,
         )
@@ -548,14 +488,12 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         _LOGGER.debug("%s - %s", self, decision)
 
         if decision.action == Action.PAUSE:
-            self._pause_power_w = self._activity.mean_power_w()
             write_event_log(
                 _LOGGER,
                 self,
                 f"pause ({decision.profile}): room {room} °C, setpoint {inputs.setpoint} °C, autonomy {decision.autonomy_minutes:.0f} min",
             )
         elif decision.action == Action.RESUME:
-            self._pause_power_w = None
             self._recovery.arm(mode if driven else HVAC_HEAT, now, room)
             write_event_log(_LOGGER, self, f"resume ({decision.reason}): room {room} °C")
 

@@ -6,20 +6,14 @@
         "description": "Met en pause l'équipement d'un thermostat over_climate quand la pièce n'en a pas besoin et tiendra sans lui.",
         "data": {
           "target_vtherm": "Versatile Thermostat",
-          "threshold_heat": "Chauffage : seuil du start/stop",
-          "threshold_cool": "Climatisation : seuil du start/stop",
-          "weather_entity": "Prévision météo",
-          "power_entity": "Puissance ou énergie de l'équipement",
-          "compressor_entity": "Compresseur en marche",
-          "defrost_entity": "Dégivrage ou préchauffage"
+          "threshold_heat": "Chauffage : seuil du start/stop (°C)",
+          "threshold_cool": "Climatisation : seuil du start/stop (°C)",
+          "weather_entity": "Prévision météo"
         },
         "data_description": {
-          "threshold_heat": "Sous cette consigne, l'auto-start/stop de VTherm éteint et rallume l'équipement. À partir de cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours.",
+          "threshold_heat": "Sous cette consigne (par exemple l'abaissement de nuit), l'auto-start/stop de VTherm éteint et rallume l'équipement. À partir de cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours.",
           "threshold_cool": "Au-dessus de cette consigne, l'auto-start/stop de VTherm éteint et rallume l'équipement. Jusqu'à cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours.",
-          "weather_entity": "Prévision horaire de la température extérieure et des nuages, pour prédire combien de temps la pièce tient.",
-          "power_entity": "Facultatif. Le plugin ne met alors en pause qu'un équipement qui consomme, et estime l'énergie évitée. Un compteur d'énergie différé convient aussi.",
-          "compressor_entity": "Facultatif. Allumé quand le compresseur tourne.",
-          "defrost_entity": "Facultatif. Allumé pendant un dégivrage (ou un préchauffage) : ni décision, ni apprentissage."
+          "weather_entity": "Facultatif. Prévision horaire de la température extérieure et des nuages, pour prédire combien de temps la pièce tient sans l'équipement."
         }
       }
     },
@@ -36,34 +30,73 @@
       "init": {
         "title": "Options de la pause intelligente",
         "data": {
-          "threshold_heat": "Chauffage : seuil du start/stop",
-          "threshold_cool": "Climatisation : seuil du start/stop",
-          "weather_entity": "Prévision météo",
-          "power_entity": "Puissance ou énergie de l'équipement",
-          "compressor_entity": "Compresseur en marche",
-          "defrost_entity": "Dégivrage ou préchauffage",
-          "setback_heat": "Consigne de veille en chauffage",
-          "setback_cool": "Consigne de veille en climatisation",
-          "comfort_excess": "Confort : excédent sur la consigne",
-          "comfort_excess_minutes": "Confort : durée de l'excédent",
-          "comfort_margin": "Confort : marge",
-          "comfort_min_pause_minutes": "Confort : autonomie nécessaire pour la pause",
-          "eco_excess": "Éco : excédent sur la consigne",
-          "eco_excess_minutes": "Éco : durée de l'excédent",
-          "eco_margin": "Éco : marge",
-          "eco_min_pause_minutes": "Éco : autonomie nécessaire pour la pause",
-          "min_run_minutes": "Marche minimale après une reprise",
-          "min_off_minutes": "Pause minimale",
-          "max_pauses_per_day": "Pauses maximales par jour",
-          "outdoor_floor_heat": "Pas de pause en chauffage en dessous de",
-          "outdoor_ceiling_cool": "Pas de pause en climatisation au-dessus de"
+          "threshold_heat": "Chauffage : seuil du start/stop (°C)",
+          "threshold_cool": "Climatisation : seuil du start/stop (°C)",
+          "weather_entity": "Prévision météo"
         },
         "data_description": {
-          "setback_heat": "Consigne envoyée pendant la pause. Vide : la température minimale du thermostat.",
-          "setback_cool": "Consigne envoyée pendant la pause. Vide : la température maximale du thermostat.",
-          "comfort_margin": "La pause se termine avant que la pièce ne dépasse la consigne de cette valeur du côté inconfortable.",
-          "threshold_heat": "Sous cette consigne, l'auto-start/stop de VTherm éteint et rallume l'équipement. À partir de cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours.",
-          "threshold_cool": "Au-dessus de cette consigne, l'auto-start/stop de VTherm éteint et rallume l'équipement. Jusqu'à cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours."
+          "threshold_heat": "Sous cette consigne (par exemple l'abaissement de nuit), l'auto-start/stop de VTherm éteint et rallume l'équipement. À partir de cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours.",
+          "threshold_cool": "Au-dessus de cette consigne, l'auto-start/stop de VTherm éteint et rallume l'équipement. Jusqu'à cette consigne, la pause intelligente décide. Vide : la pause intelligente décide toujours.",
+          "weather_entity": "Facultatif. Prévision horaire de la température extérieure et des nuages, pour prédire combien de temps la pièce tient sans l'équipement."
+        },
+        "sections": {
+          "pause_rules": {
+            "name": "Règles de pause",
+            "description": "Quand la pause intelligente décide : le côté confort d'un seuil du start/stop, ou un mode sans seuil.",
+            "data": {
+              "comfort_excess": "Excédent avant la pause (°C)",
+              "comfort_excess_minutes": "Durée de l'excédent (min)",
+              "comfort_margin": "Marge de confort (°C)",
+              "comfort_min_pause_minutes": "Autonomie minimale pour la pause (min)"
+            },
+            "data_description": {
+              "comfort_excess": "Ne met en pause que si la pièce dépasse la consigne d'au moins cette valeur (au-dessus en chauffage, en dessous en climatisation). Avec un capteur de pièce qui varie de 0,2 °C, 0,3 revient à un excédent de 0,4 °C.",
+              "comfort_excess_minutes": "L'excédent doit durer ce temps avant une pause.",
+              "comfort_margin": "La limite de confort : la pièce ne doit pas s'éloigner de la consigne de plus que cela du côté inconfortable (en dessous en chauffage). La pause se termine à la moitié de cette marge, ou plus tôt si le modèle prédit que la limite sera atteinte.",
+              "comfort_min_pause_minutes": "Ne met en pause que si le modèle prédit que la pièce tiendra au moins ce temps sans l'équipement."
+            }
+          },
+          "setback": {
+            "name": "Consigne envoyée pendant la pause",
+            "description": "Ce que reçoit l'équipement pendant une pause. Laissez les deux vides sauf si votre unité continue de tourner au minimum (chauffage) ou au maximum (climatisation) du thermostat.",
+            "data": {
+              "setback_heat": "Chauffage (°C)",
+              "setback_cool": "Climatisation (°C)"
+            },
+            "data_description": {
+              "setback_heat": "Pendant la pause, l'équipement reçoit cette consigne basse : son propre thermostat arrête le compresseur et l'unité reste allumée. Vide : la température minimale du thermostat.",
+              "setback_cool": "Pendant la pause, l'équipement reçoit cette consigne haute : son propre thermostat arrête le compresseur et l'unité reste allumée. Vide : la température maximale du thermostat."
+            }
+          },
+          "guards": {
+            "name": "Protection du compresseur",
+            "description": "Limites qui évitent que l'équipement s'arrête et redémarre trop souvent.",
+            "data": {
+              "min_run_minutes": "Marche minimale après une reprise (min)",
+              "min_off_minutes": "Pause minimale (min)",
+              "max_pauses_per_day": "Pauses maximales par jour",
+              "outdoor_floor_heat": "Chauffage : pas de pause sous cette température extérieure (°C)",
+              "outdoor_ceiling_cool": "Climatisation : pas de pause au-dessus de cette température extérieure (°C)"
+            },
+            "data_description": {
+              "min_run_minutes": "Après une reprise, l'équipement tourne au moins ce temps avant la pause suivante.",
+              "min_off_minutes": "Une pause dure au moins ce temps, sauf si le confort exige une reprise plus tôt.",
+              "max_pauses_per_day": "Protège le compresseur d'un trop grand nombre d'arrêts et de démarrages."
+            }
+          },
+          "fallback_rules": {
+            "name": "Règles de repli",
+            "description": "Utilisées seulement du côté éco d'un seuil, quand l'auto-start/stop de VTherm n'est pas configuré sur le thermostat. À ignorer sinon.",
+            "data": {
+              "eco_excess": "Excédent avant la pause (°C)",
+              "eco_excess_minutes": "Durée de l'excédent (min)",
+              "eco_margin": "Marge de confort (°C)",
+              "eco_min_pause_minutes": "Autonomie minimale pour la pause (min)"
+            },
+            "data_description": {
+              "eco_excess": "Même sens que les règles de pause, avec des marges plus larges."
+            }
+          }
         }
       }
     }
@@ -86,9 +119,6 @@
       },
       "pauses_today": {
         "name": "Pauses du jour"
-      },
-      "avoided_energy": {
-        "name": "Énergie évitée"
       }
     },
     "switch": {

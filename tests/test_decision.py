@@ -15,7 +15,7 @@ ECO = Profile(excess=0.2, excess_minutes=10.0, margin=1.0, min_pause_minutes=30.
 
 def _inputs(minute: float, room: float, setpoint: float = 20.0, hvac_mode: str = "heat", **kwargs) -> Inputs:
     """Build the inputs of one cycle at *minute* of day 1."""
-    defaults = {"model_ready": True, "recovery_minutes": 30.0, "activity": True, "outdoor": 10.0}
+    defaults = {"model_ready": True, "recovery_minutes": 30.0, "outdoor": 10.0}
     defaults.update(kwargs)
     return Inputs(now=minute * 60.0, day=1, hvac_mode=hvac_mode, setpoint=setpoint, room=room, **defaults)
 
@@ -73,20 +73,6 @@ def test_short_autonomy_blocks():
     engine = _engine()
     decisions = _run(engine, 0, 40, 20.4, predict=lambda *_: 45.0)
     assert decisions[-1].reason == "short_autonomy"
-
-
-def test_nothing_to_save_blocks():
-    """An equipment that did nothing lately is not paused."""
-    engine = _engine()
-    decisions = _run(engine, 0, 40, 20.4, activity=False)
-    assert decisions[-1].reason == "nothing_to_save"
-
-
-def test_unknown_activity_does_not_block():
-    """Without any entity telling, the activity is assumed."""
-    engine = _engine()
-    decisions = _run(engine, 0, 40, 20.4, activity=None)
-    assert any(d.action == Action.PAUSE for d in decisions)
 
 
 def test_outdoor_bounds_block():

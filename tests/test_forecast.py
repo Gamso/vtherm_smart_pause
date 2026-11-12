@@ -1,10 +1,9 @@
-"""Weather forecast cache and activity tracker."""
+"""Weather forecast cache."""
 
 from datetime import datetime, timezone
 
 from homeassistant.core import SupportsResponse
 
-from custom_components.vtherm_smart_pause.activity import ActivityTracker
 from custom_components.vtherm_smart_pause.forecast import WeatherForecast, parse_forecast
 
 T0 = datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc).timestamp()
@@ -52,24 +51,3 @@ async def test_no_forecast_keeps_the_current_reading(integration):
     forecast = WeatherForecast(integration, None)
     await forecast.async_refresh(T0)
     assert forecast.weather_at(T0 + 7200, T0, 8.0)[0] == 8.0
-
-
-def test_activity_from_power_energy_or_compressor():
-    """Power, energy counter or compressor state each tell whether the equipment ran."""
-    tracker = ActivityTracker(window_s=1800, min_power_w=30)
-    assert tracker.is_active() is None
-    tracker.add(0, power_w=5)
-    assert tracker.is_active() is False
-    tracker.add(60, power_w=400)
-    assert tracker.is_active() is True
-
-    energy = ActivityTracker(window_s=1800, min_power_w=30)
-    energy.add(0, energy_kwh=10.0)
-    energy.add(1800, energy_kwh=10.05)
-    assert abs(energy.mean_power_w() - 100.0) < 1e-6
-
-    compressor = ActivityTracker(window_s=1800, min_power_w=30)
-    compressor.add(0, running=False, power_w=500)
-    assert compressor.is_active() is False
-    compressor.add(2000, running=True)
-    assert compressor.is_active() is True

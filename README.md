@@ -31,9 +31,8 @@ On every VTherm control cycle the plugin:
    real stops only: nights with the thermostat off, and its own pauses.
 2. **Predicts** how long the room would hold, equipment paused, before crossing its comfort limit,
    using the weather forecast for the outdoor temperature and the clouds.
-3. **Pauses** when the room has been past the setpoint long enough, will hold long enough, and the
-   equipment is actually doing something. It **resumes** before the room reaches the limit, or at
-   once if comfort calls for it.
+3. **Pauses** when the room has been past the setpoint long enough and will hold long enough without
+   the equipment. It **resumes** before the room reaches the limit, or at once if comfort calls for it.
 
 A pause sends the equipment a **setback setpoint** (by default the thermostat's minimum in heating,
 its maximum in cooling): the unit's own thermostat goes idle while the unit stays on, so it restarts
@@ -43,14 +42,22 @@ safety mode) and takes over again at once when the plugin lets go.
 
 Heating and cooling are handled the same way, mirrored.
 
-### Start/stop threshold per mode
+### Two ways to keep the compressor off
 
-A setpoint threshold per HVAC mode says who decides, as HomeShift's threshold did:
+| | VTherm's auto start/stop (**on/off**) | Smart pause (**setback**) |
+|---|---|---|
+| What it does | Switches the equipment fully off, then on again | Sends a very low setpoint (heating) or a very high one (cooling). The unit stays on and its own thermostat stops the compressor |
+| Restart | Slow: the unit starts again from off | Immediate: the previous setpoint is sent back |
+| VTherm's HVAC mode | `off` while stopped | unchanged |
+| Best for | Long periods without need, such as a night setback | Short, repeated pauses while you are home |
+
+**The criterion is the setpoint threshold of each mode.** It says who decides, as HomeShift's
+threshold did:
 
 | Setpoint (heating) | Who decides | VTherm's `enable_auto_start_stop` switch |
 |---|---|---|
-| below `threshold_heat` (e.g. a 17.5 °C night setback) | VTherm's own auto start/stop: it switches the equipment fully off and on | turned **on** |
-| at or above `threshold_heat` | the smart pause, comfort profile | turned **off** |
+| below `threshold_heat` (e.g. a 17.5 °C night setback) | VTherm's own auto start/stop | turned **on** |
+| at or above `threshold_heat` (e.g. 20 °C by day) | the smart pause, by setback | turned **off** |
 
 Cooling mirrors it with `threshold_cool`: VTherm decides above it, the smart pause at or below it.
 A mode without a threshold never delegates: the smart pause always decides there and VTherm's switch
@@ -58,25 +65,40 @@ stays off, so only one of them decides.
 
 The switch is only written when the side changes (and once at start), so a flip by hand holds until
 the next change. It needs the auto start/stop feature configured on the thermostat. Without it, the
-smart pause decides on both sides, in its eco profile below the threshold.
+smart pause decides on both sides, with its fallback rules below the threshold.
 
-### Profiles
+### What the settings mean
 
-| | Comfort | Eco (fallback) |
+The options form shows the start/stop thresholds and the weather forecast first, then four
+sections: **Pause rules** (open), **Setpoint sent while paused**, **Compressor protection** and
+**Fallback rules** (collapsed).
+
+**Pause rules.** They apply when the smart pause decides.
+
+| Setting | Meaning | Default |
 |---|---|---|
-| When | comfort side of the threshold, or no threshold set | eco side, only when VTherm's auto start/stop is not configured |
-| Excess needed before a pause | 0.3 °C for 20 min | 0.2 °C for 10 min |
-| Comfort limit (setpoint ∓ margin) | 0.3 °C | 1.0 °C |
-| Predicted autonomy needed | 60 min | 30 min |
-| Needs a learned model | yes (3 night stops) | no, uses a prudent default |
+| Excess before pausing | Pause only when the room is at least this far past the setpoint (above it in heating, below it in cooling). With a room sensor that moves by 0.2 °C, 0.3 means a 0.4 °C excess. | 0.3 °C |
+| How long the excess must last | The excess must last this long before a pause. | 20 min |
+| Comfort margin | The comfort limit: the room must not go further than this on the uncomfortable side of the setpoint (below it in heating). The pause ends at half this margin, or earlier when the model predicts the limit will be reached. | 0.3 °C |
+| Minimum autonomy to pause | Pause only if the model predicts the room will hold at least this long without the equipment. | 60 min |
 
-The comfort defaults were calibrated by replaying the ten days of measurements
+**Fallback rules.** The same four settings, with wider margins (0.2 °C, 10 min, 1.0 °C, 30 min).
+They are used only on the eco side of a threshold when VTherm's auto start/stop is not configured on
+the thermostat. If you use the auto start/stop, you can ignore them.
+
+**Setpoint sent while paused.** The low setpoint (heating) or high setpoint (cooling) the equipment
+receives during a pause. Empty: the thermostat's minimum temperature in heating, its maximum in
+cooling. Leave it empty unless your unit keeps heating at that value.
+
+The defaults of the pause rules were calibrated by replaying the ten days of measurements
 ([study](docs/study.md), §8).
 
-### Compressor guards
+### Compressor protection
 
 At least 15 min of run after a resume, at least 20 min of pause, at most 8 pauses a day, no pause
 in heating below −5 °C outside or in cooling above 40 °C. All of them are options.
+
+A defrost reported by VTherm ends a pause and stops the decisions.
 
 ## Requirements
 
@@ -101,12 +123,8 @@ in heating below −5 °C outside or in cooling above 40 °C. All of them are op
 |---|---|
 | Versatile Thermostat | The `over_climate` thermostat to pause (one entry per thermostat). |
 | Heating / cooling start/stop threshold | Heating: below it VTherm's auto start/stop decides, from it up the smart pause. Cooling: above it VTherm decides, from it down the smart pause. Empty: the smart pause always decides in that mode. |
-| Weather forecast | Hourly forecast of outdoor temperature and clouds. Without it the outdoor temperature is assumed constant. |
-| Power or energy of the equipment | Optional. A power sensor (W, kW) or an energy counter (Wh, kWh), even a delayed one. Pauses only an equipment that draws power, and estimates the avoided energy. |
-| Compressor running | Optional. On while the compressor runs. Pauses only a running equipment. A pause during which it still runs teaches nothing. |
-| Defrost or preheating | Optional. On during a defrost: no decision, no learning. |
-| Setback (options) | Setpoint sent while paused. Default: the thermostat's minimum (heating) or maximum (cooling). |
-| Profile margins and guards (options) | See the tables above. |
+| Weather forecast | Optional. Hourly forecast of outdoor temperature and clouds. Without it the outdoor temperature is assumed constant. |
+| Pause rules, setpoint sent while paused, compressor protection, fallback rules (options) | Collapsible sections of the options form, see the sections above. |
 
 ## Entities
 
@@ -119,7 +137,6 @@ For each thermostat, a device "*‹thermostat› Smart Pause*" with:
 | Sensor **Autonomy** | Predicted minutes the room would hold if paused now. |
 | Sensor **Heat loss coefficient** | Learned `k` (1/h). Attributes: solar gain, learned stops, readiness, recovery time. |
 | Sensor **Pauses today** | Pauses since midnight. |
-| Sensor **Avoided energy** | Energy not drawn while paused (upper bound), with a power or energy entity only. |
 
 The thermostat itself also carries a `smart_pause` attribute section (state, reason, profile,
 autonomy, limit, setback, learned values). Other plugins read `smart_pause.state` to stand down
@@ -133,6 +150,9 @@ during a pause.
   starts after three nights with the thermostat off.
 - Not yet checked on hardware: that VTherm sends the setback when its self-regulation is set to
   "none".
+- It does not read the equipment's power, compressor or defrost entities, since not every
+  installation has them. A pause that does not really stop the compressor lengthens the learned
+  autonomy a little, and the pause still ends on comfort.
 
 ## Development
 

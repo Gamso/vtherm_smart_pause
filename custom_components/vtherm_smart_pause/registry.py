@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_TARGET_VTHERM, DATA_ADD_ENTITIES, DATA_ENTITIES, DATA_MANAGERS, DOMAIN
+from .const import CONF_TARGET_VTHERM, DATA_ADD_ENTITIES, DATA_ENTITIES, DATA_MANAGERS, DOMAIN, SECTIONS
 
 if TYPE_CHECKING:
     from .manager import SmartPauseFeatureManager
@@ -23,10 +23,18 @@ def merged_config(entry: Any) -> dict[str, Any]:
 
     Options replace the data rather than being merged over it: a field cleared
     in the options form (an entity removed) must not come back from the data.
+    The fields of the options form's sections are stored nested under the
+    section's key and come back flat here, as the flat options of an older
+    version of the form do.
     """
-    if entry.options:
-        return {CONF_TARGET_VTHERM: entry.data.get(CONF_TARGET_VTHERM), **entry.options}
-    return dict(entry.data)
+    source = {CONF_TARGET_VTHERM: entry.data.get(CONF_TARGET_VTHERM), **entry.options} if entry.options else dict(entry.data)
+    flat: dict[str, Any] = {}
+    for key, value in source.items():
+        if key in SECTIONS and isinstance(value, dict):
+            flat.update(value)
+        else:
+            flat[key] = value
+    return flat
 
 
 def domain_data(hass: HomeAssistant) -> dict[str, Any]:

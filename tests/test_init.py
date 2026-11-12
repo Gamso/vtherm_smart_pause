@@ -57,7 +57,6 @@ async def test_entities_are_created_by_the_manager(integration):
     assert integration.states.get("sensor.salon_smart_pause_state").state == "running"
     assert integration.states.get("switch.salon_smart_pause_smart_pause").state == "on"
     assert integration.states.get("sensor.salon_smart_pause_heat_loss_coefficient") is not None
-    assert integration.states.get("sensor.salon_smart_pause_avoided_energy") is None
 
     await integration.services.async_call("switch", "turn_off", {"entity_id": "switch.salon_smart_pause_smart_pause"}, blocking=True)
     assert manager.enabled is False
