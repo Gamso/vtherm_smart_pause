@@ -28,7 +28,8 @@ On every VTherm control cycle the plugin:
 
 1. **Learns** how fast the room drifts toward the outdoor temperature when the equipment is
    stopped, and how much the sun warms it (`dT/dt = k · (T_out − T_in) + g · sun`). It learns from
-   real stops only: nights with the thermostat off, and its own pauses.
+   real stops only: nights with the thermostat off, and its own pauses. At install time it reads
+   the last ten days of Home Assistant's history, so it is usually ready on the first cycle.
 2. **Predicts** how long the room would hold, equipment paused, before crossing its comfort limit,
    using the weather forecast for the outdoor temperature and the clouds.
 3. **Pauses** when the room has been past the setpoint long enough and will hold long enough without
@@ -146,8 +147,10 @@ during a pause.
 
 - Pauses by setback only. The full stop (VTherm inhibition) is planned.
 - VTherm's auto start/stop switch is not restored to its previous state when the plugin is removed.
-- The model learns from scratch: no bootstrap from the recorder history yet. The comfort profile
-  starts after three nights with the thermostat off.
+- The comfort side needs three stops of at least two hours without sun. They come from the
+  recorder history at install time, or else from three nights with the thermostat off.
+- The history does not say why the thermostat was off. A stop caused by an open window is read as
+  a stop and overestimates the heat loss a little.
 - Not yet checked on hardware: that VTherm sends the setback when its self-regulation is set to
   "none".
 - It does not read the equipment's power, compressor or defrost entities, since not every

@@ -13,6 +13,8 @@ CONF_THERMOSTAT_CLIMATE = "thermostat_over_climate"
 VTHERM_AUTO_START_STOP_SUFFIX = "_enable_auto_start_stop"
 #: VTherm reports this reason when a window opening switched it off.
 HVAC_OFF_REASON_WINDOW = "hvac_off_window_detection"
+#: Key, in the VTherm's own configuration, of its outdoor temperature sensor.
+VTHERM_CONF_EXTERNAL_TEMP_SENSOR = "external_temperature_sensor_entity_id"
 #: Command cause VTherm passes when it follows a change made on the device itself.
 COMMAND_CAUSE_UNDERLYING_TRACKING = "underlying_tracking"
 

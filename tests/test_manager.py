@@ -93,6 +93,18 @@ async def test_learns_from_a_night_off(integration):
     assert manager.model.segments[0].hvac_mode == "heat"
 
 
+async def test_fan_only_is_not_a_stop(integration):
+    """Fan only or dry (VTherm's auto start/stop stop modes) leave the equipment running: nothing is learned."""
+    manager, runtime = await _manager(integration)
+    runtime.vtherm_hvac_mode = "fan_only"
+    for minute in range(240):
+        runtime.current_temperature = round(round((20.0 - 0.006 * minute) / 0.2) * 0.2, 1)
+        await _cycles(manager, runtime, 1)
+    runtime.vtherm_hvac_mode = "heat"
+    await _cycles(manager, runtime, 1)
+    assert not manager.model.segments
+
+
 async def test_pause_survives_a_restart(integration):
     """A new manager on the same entry comes back paused."""
     manager, runtime = await _paused(integration)

@@ -118,6 +118,7 @@ class HeatLossSensor(SmartPauseEntity, SensorEntity):
             "segments": len(model.segments),
             "sunless_segments": model.sunless_count(mode),
             "ready": model.is_ready(mode),
+            "segments_from_history": self._manager.history_segments,
             "recovery_minutes": round(model.recovery_minutes(mode), 1),
         }
 
