@@ -170,7 +170,7 @@ thermo-off.
 |---|---|
 | Who owns the setpoint threshold? | **The plugin.** HomeShift stops driving the switch |
 | Minimum `vtherm_api` | **The latest** (0.9.0): inhibition and the setpoint modifier |
-| Unit-specific entities | **Optional**: the plugin works without them (§5) |
+| Unit-specific entities | **Not read** in the end: not every installation has them (§5) |
 | Source of solar gains | **Weather forecast** (e.g. Météo-France) |
 | Read the schedule? | **No.** If the setpoint goes to comfort and everything shows the unit is not needed, it is paused anyway |
 | Brands | **Any heat pump or air conditioner** behind an `over_climate` VTherm |
@@ -225,6 +225,10 @@ The minimum pause is kept unless comfort requires otherwise.
 - **Coexistence with `vtherm_mpc_fan`**: during a pause, the MPC must neither decide nor learn.
 
 ## 5. Optional entities: how useful are they?
+
+> **Outcome**: the first release reads none of them. Not every installation exposes a power
+> sensor, a compressor state or a defrost state, so the plugin was kept free of any such
+> setting. This section records what they would have added.
 
 The heart of the decision (excess and autonomy) only uses the room temperature, the setpoint, the
 outdoor temperature and the forecast. The unit's entities serve three purposes:

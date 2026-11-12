@@ -19,7 +19,7 @@ room fall below `setpoint − margin`.
 - `heat` **and** `cool` modes from the first version (mirrored), one VTherm per config entry.
 - A start/stop threshold per `hvac_mode`, taken from HomeShift: on its eco side VTherm's own auto
   start/stop decides, on its comfort side the smart pause.
-- A learned heat-loss model, the weather forecast, optional equipment entities.
+- A learned heat-loss model and the weather forecast. No equipment-specific entity is read.
 
 **Out of scope**
 - Reading a schedule.
@@ -48,7 +48,6 @@ A VTherm **feature manager** plugin, same skeleton as `vtherm_mpc_fan`.
 | `manager.py` | `SmartPauseFeatureManager`: `refresh_state()` on every VTherm cycle, inputs, learning, setpoint modifier, entities | yes |
 | `decision.py` | pure decision engine (§5): state + inputs → action + reason | **no** |
 | `thermal_model.py` | heat-loss and recovery model, learning, (de)serialisation (§6) | **no** |
-| `activity.py` | "something to save" from the optional entities | **no** |
 | `solar.py` | sun elevation and sun factor | **no** |
 | `forecast.py` | `weather.get_forecasts` reading and cache (§7) | yes (thin layer) |
 | `config_flow.py` | config and options (§4) | yes |
@@ -72,9 +71,6 @@ The pure modules import neither Home Assistant nor `vtherm_api`, for the tests a
 | `stop_mode` *(planned)* | `setback` / `inhibit` | `setback` | §8 |
 | `setback_heat` / `setback_cool` | °C | the VTherm's `min_temp` / `max_temp` | setpoint sent in `setback` (VTherm clamps it to the device limits anyway) |
 | `weather_entity` | `weather.*` | optional | forecast (§7). Without it, `T_out` stays at its current value |
-| `power_entity` | W / kW sensor **or** Wh / kWh counter | optional | gain and the "something to save" condition (§5.3) |
-| `compressor_entity` | on/off entity | optional | precise cycle detection |
-| `defrost_entity` | on/off entity | optional | defrost or preheating: blocks decisions and learning |
 
 `setback` is the default: validated on hardware (16 °C test, study §1.1), it leaves the VTherm in
 `heat` / `cool` and the restart is immediate. `inhibit` really switches the device off, but shows the
@@ -107,7 +103,7 @@ tuned yet.
 
 `now`, the VTherm's effective `hvac_mode`, the user's setpoint, the room temperature, the outdoor
 temperature, the forecast (outdoor temperature and sun per hour), the reason not to decide (window,
-defrost, load shedding, plugin disabled), the activity of the equipment when an entity tells, the
+defrost, load shedding, plugin disabled), the
 model's readiness and the learned recovery time.
 
 Always the **user's** setpoint, never the regulated one. Never VTherm's `hvac_action` (wrong during
@@ -128,9 +124,7 @@ Always the **user's** setpoint, never the regulated one. Never VTherm's `hvac_ac
 2. **Excess**: `error ≤ −δ` (error positive = need) continuously for `excess_minutes`.
 3. **Autonomy**: `predicted autonomy ≥ max(min_pause_minutes, min_off_minutes + recovery + 10 min)`
    (§6.2).
-4. **Something to save**: when a compressor or power entity is configured, activity in the last 30
-   minutes (compressor running, or mean power > 30 W). Otherwise assumed.
-5. **Guards**: `T_out` within the profile's bounds, `min_run_minutes` elapsed since the last resume,
+4. **Guards**: `T_out` within the profile's bounds, `min_run_minutes` elapsed since the last resume,
    pauses today < `max_pauses_per_day`, model ready for the comfort profile (§6.3).
 
 ### 5.4 Resume: one condition is enough
@@ -174,8 +168,7 @@ Without a forecast, `T_out` is constant and the sky counts as half covered.
 ### 6.3 Learning
 
 - Samples: stretches with the equipment **really** stopped (VTherm `off` other than for a window, or
-  paused by the plugin while the compressor entity, when configured, confirms it is idle), without
-  defrost, the first 30 minutes dropped (the unit's residual heat).
+  paused by the plugin), without a defrost reported by VTherm, the first 30 minutes dropped (the unit's residual heat).
 - Each stretch is reduced to three integrals (temperature change, exposure `∫(T_out − T_in) dt`,
   sun `∫S dt`). `K` is the weighted median of the per-segment ratio over sunless segments, `g` the
   weighted median of the residual over sunny ones. Robust to 0.2 °C sensor steps, no numerical
@@ -194,7 +187,7 @@ stop stretches. On the reference period that already gives about 15 usable night
 ### 6.5 Persistence
 
 `homeassistant.helpers.storage.Store`, key `vtherm_smart_pause.<config entry id>`: model, engine
-state (a pause survives a restart), switch, avoided energy.
+state (a pause survives a restart) and the switch.
 
 ## 7. Forecast and sun (`forecast.py`, `solar.py`)
 
@@ -299,7 +292,6 @@ Each VTherm gets a device "‹VTherm› Smart Pause":
 | sensor **Autonomy** | predicted autonomy (min) |
 | sensor **Heat loss coefficient** | learned `k` (1/h). Attributes: `g`, segments, sunless segments, readiness, recovery |
 | sensor **Pauses today** | pauses since midnight |
-| sensor **Avoided energy** | estimated avoided energy (kWh, `total_increasing`): mean power over the 30 min before each pause × its duration. Only with a power or energy entity |
 
 Plus a `smart_pause` section in the VTherm's `extra_state_attributes`. Planned: the
 `vtherm_smart_pause_event` event (`pause` / `resume`) and an optional CSV export (§11.1).
@@ -340,8 +332,7 @@ The past data is kept: it is both the replay set and the calibration of the benc
 - `decision.py`: each pause and resume condition on its own, profiles, heat/cool mirror, restore.
 - `thermal_model.py`: recover known `k` and `g` from synthetic series quantized to 0.2 °C. Autonomy
   against the analytic solution, cold start, retention, persistence.
-- `forecast.py` / `activity.py`: missing fields, service failure, `condition` mapping, power,
-  energy counter, compressor.
+- `forecast.py`: missing fields, service failure, `condition` mapping.
 - Home Assistant tests (core 2026.11): setup / unload, factory and `vtherm_api` protocols, manager,
   config and options flows, entities. A deprecation logged about this integration fails the test.
 - `vtherm_mpc_fan` conventions: no `time.sleep`, injectable clock, a docstring on every test,
@@ -375,7 +366,7 @@ nothing, VTherm's auto start/stop alone, the plugin.
 | 3 | `forecast.py` | **done** |
 | 4 | `decision.py` + replay | **done** |
 | 5 | Pause by `setback`. Clear the **[NOT VERIFIED]** of §8.1 with a trial | code **done**. One-day heating trial **to do** |
-| 6 | Entities, avoided energy. Event and CSV export | entities and energy **done**. Event and CSV **to do** |
+| 6 | Entities. Event and CSV export | entities **done**. Event and CSV **to do** |
 | 7 | Closed-loop bench, eco profile calibration | to do |
 | 8 | Start/stop threshold per mode and ownership of the native switch (§8.4) | **done** |
 | 9 | `inhibit`, restoring the native switch on unload, HomeShift migration | to do |
@@ -385,3 +376,10 @@ nothing, VTherm's auto start/stop alone, the plugin.
 Name: `vtherm_smart_pause` (Home Assistant domain, folder and entity prefix). Any brand of heat pump
 (§1). Cooling from the first version (§1). Without summer data, cooling is validated on the bench by
 mirroring heating, then on a real export next summer.
+
+**Equipment entities dropped.** Earlier drafts read an optional power or energy sensor, a compressor
+entity and a defrost entity, to avoid pausing an equipment that was already idle and to estimate the
+energy saved. Not every installation has them, so v0.1.x reads none. Consequences: a pause may start
+on an equipment already in thermo-off (no gain, no harm), and a pause that does not really stop the
+compressor lengthens the learned autonomy a little, while the pause still ends on comfort. A defrost
+is detected from VTherm's own `hvac_action`.

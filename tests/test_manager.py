@@ -1,12 +1,9 @@
 """Tests of the feature manager against a real Home Assistant core and a fake VTherm runtime."""
 
-import pytest
 from conftest import FakeRuntime, make_entry
 
 from custom_components.vtherm_smart_pause.const import (
     ATTR_SECTION,
-    CONF_COMPRESSOR_ENTITY,
-    CONF_POWER_ENTITY,
     CONF_SETBACK_HEAT,
     CONF_THRESHOLD_HEAT,
     HVAC_OFF_REASON_WINDOW,
@@ -83,23 +80,6 @@ async def test_window_releases_the_pause(integration):
     assert manager.decision.reason == "window"
 
 
-async def test_idle_equipment_is_not_paused(integration):
-    """A power sensor reading next to nothing blocks the pause."""
-    integration.states.async_set("sensor.pac_power", "1", {"unit_of_measurement": "W"})
-    manager, runtime = await _manager(integration, **{CONF_POWER_ENTITY: "sensor.pac_power"})
-    runtime.current_temperature = 20.4
-    await _cycles(manager, runtime, 15)
-    assert manager.decision.reason == "nothing_to_save"
-
-
-async def test_avoided_energy_accumulates(integration):
-    """While paused, the power drawn before the pause is counted as avoided."""
-    integration.states.async_set("sensor.pac_power", "300", {"unit_of_measurement": "W"})
-    manager, runtime = await _paused(integration, **{CONF_POWER_ENTITY: "sensor.pac_power"})
-    await _cycles(manager, runtime, 60)
-    assert manager.avoided_energy_kwh == pytest.approx(0.3, abs=0.02)
-
-
 async def test_learns_from_a_night_off(integration):
     """Three hours of VTherm off, room cooling, become one learned segment."""
     manager, runtime = await _manager(integration)
@@ -111,13 +91,6 @@ async def test_learns_from_a_night_off(integration):
     await _cycles(manager, runtime, 1)
     assert len(manager.model.segments) == 1
     assert manager.model.segments[0].hvac_mode == "heat"
-
-
-async def test_running_compressor_is_not_a_stop(integration):
-    """A pause during which the compressor still runs teaches nothing."""
-    integration.states.async_set("binary_sensor.compressor", "on")
-    manager, runtime = await _paused(integration, **{CONF_COMPRESSOR_ENTITY: "binary_sensor.compressor"})
-    assert manager._recorder is None  # noqa: SLF001
 
 
 async def test_pause_survives_a_restart(integration):
@@ -140,3 +113,21 @@ async def test_custom_attributes(integration):
     assert section["profile"] == "eco"
     assert section["setback"] == 16.0
     assert section["model_ready"] is False
+
+
+async def test_defrost_releases_the_pause(integration):
+    """A defrost reported by VTherm ends the pause and stops the decisions."""
+    manager, runtime = await _paused(integration)
+    runtime.hvac_action = "defrosting"
+    await _cycles(manager, runtime, 1)
+    assert manager.decision.reason == "defrost"
+    assert manager.engine.state == State.INACTIVE
+
+
+async def test_defrost_is_not_learned(integration):
+    """A stretch with the equipment off but defrosting teaches nothing."""
+    manager, runtime = await _manager(integration)
+    runtime.vtherm_hvac_mode = "off"
+    runtime.hvac_action = "defrosting"
+    await _cycles(manager, runtime, 5)
+    assert manager._recorder is None  # noqa: SLF001

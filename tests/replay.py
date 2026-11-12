@@ -36,8 +36,6 @@ LATITUDE = 46.5
 LONGITUDE = 2.5
 #: Offset of the local time the dataset was recorded in (CET), for the daily pause count.
 LOCAL_OFFSET_S = 3600
-ACTIVITY_WINDOW_MIN = 30
-ACTIVITY_MIN_POWER_W = 30.0
 
 
 def _num(value: str) -> float | None:
@@ -122,9 +120,6 @@ def run_replay(settings: Settings | None = None, rows: list[dict] | None = None)
             sim_room += (k * (row["outdoor"] - sim_room) + g * weather_at(now)[1]) / 60.0
             room = sim_room
 
-        window = rows[max(0, index - ACTIVITY_WINDOW_MIN) : index + 1]
-        activity = sum(r["power"] for r in window) / len(window) > ACTIVITY_MIN_POWER_W
-
         found = recovery.update(now, row["room"], resolution.value)
         if found is not None:
             model.add_recovery(*found)
@@ -137,7 +132,6 @@ def run_replay(settings: Settings | None = None, rows: list[dict] | None = None)
             setpoint=row["setpoint"],
             room=room,
             outdoor=row["outdoor"],
-            activity=activity,
             model_ready=model.is_ready(mode) if mode else False,
             recovery_minutes=model.recovery_minutes(mode) if mode else 30.0,
         )

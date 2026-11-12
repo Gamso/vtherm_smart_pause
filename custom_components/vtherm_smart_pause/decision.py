@@ -93,8 +93,6 @@ class Inputs:
     outdoor: float | None = None
     #: A reason not to decide at all (window, defrost, disabled...). None when free.
     inactive_reason: str | None = None
-    #: Whether the equipment did anything lately: None when no entity tells.
-    activity: bool | None = None
     model_ready: bool = False
     recovery_minutes: float = 30.0
 
@@ -232,8 +230,6 @@ class DecisionEngine:
         needed = max(profile.min_pause_minutes, s.min_off_minutes + inputs.recovery_minutes + s.restart_buffer_minutes)
         if autonomy < needed:
             return "short_autonomy"
-        if inputs.activity is False:
-            return "nothing_to_save"
         if inputs.outdoor is not None:
             if inputs.hvac_mode == HVAC_HEAT and inputs.outdoor < s.outdoor_floor_heat:
                 return "outdoor_too_cold"

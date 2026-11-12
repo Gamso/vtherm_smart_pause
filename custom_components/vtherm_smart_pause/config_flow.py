@@ -16,8 +16,6 @@ from .const import (
     CONF_COMFORT_EXCESS_MINUTES,
     CONF_COMFORT_MARGIN,
     CONF_COMFORT_MIN_PAUSE,
-    CONF_COMPRESSOR_ENTITY,
-    CONF_DEFROST_ENTITY,
     CONF_ECO_EXCESS,
     CONF_ECO_EXCESS_MINUTES,
     CONF_ECO_MARGIN,
@@ -27,7 +25,6 @@ from .const import (
     CONF_MIN_RUN_MINUTES,
     CONF_OUTDOOR_CEILING_COOL,
     CONF_OUTDOOR_FLOOR_HEAT,
-    CONF_POWER_ENTITY,
     CONF_SETBACK_COOL,
     CONF_SETBACK_HEAT,
     CONF_TARGET_VTHERM,
@@ -67,9 +64,6 @@ def _entities_schema(defaults: dict[str, Any]) -> dict:
         _optional(CONF_THRESHOLD_HEAT, defaults): _temperature(5, 35),
         _optional(CONF_THRESHOLD_COOL, defaults): _temperature(15, 35),
         _optional(CONF_WEATHER_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
-        _optional(CONF_POWER_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class=["power", "energy"])),
-        _optional(CONF_COMPRESSOR_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch", "input_boolean"])),
-        _optional(CONF_DEFROST_ENTITY, defaults): selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "input_boolean"])),
     }
 
 

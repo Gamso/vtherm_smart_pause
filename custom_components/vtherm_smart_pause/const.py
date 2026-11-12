@@ -23,9 +23,6 @@ CONF_TARGET_VTHERM = "target_vtherm"  # unique_id of the VTherm this plugin driv
 CONF_THRESHOLD_HEAT = "threshold_heat"
 CONF_THRESHOLD_COOL = "threshold_cool"
 CONF_WEATHER_ENTITY = "weather_entity"
-CONF_POWER_ENTITY = "power_entity"
-CONF_COMPRESSOR_ENTITY = "compressor_entity"
-CONF_DEFROST_ENTITY = "defrost_entity"
 CONF_SETBACK_HEAT = "setback_heat"
 CONF_SETBACK_COOL = "setback_cool"
 CONF_COMFORT_EXCESS = "comfort_excess"
@@ -66,9 +63,6 @@ ATTR_SECTION = "smart_pause"
 #: Weather forecast refresh period and how long a stale forecast is still used.
 FORECAST_REFRESH_S = 1800.0
 FORECAST_MAX_AGE_S = 3 * 3600.0
-#: Activity window and threshold for the "something to save" condition.
-ACTIVITY_WINDOW_S = 1800.0
-ACTIVITY_MIN_POWER_W = 30.0
 
 ENTITY_UNIQUE_ID_PREFIX = DOMAIN
 

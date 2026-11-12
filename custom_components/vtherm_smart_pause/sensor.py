@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -41,8 +41,6 @@ def build_entities(manager) -> list[SensorEntity]:
         HeatLossSensor(manager),
         PausesTodaySensor(manager),
     ]
-    if manager.has_energy_source:
-        entities.append(AvoidedEnergySensor(manager))
     bucket[PLATFORM_SENSOR] = entities
     return entities
 
@@ -136,20 +134,3 @@ class PausesTodaySensor(SmartPauseEntity, SensorEntity):
     def native_value(self) -> int:
         """The daily pause count."""
         return self._manager.engine.pauses_today
-
-
-class AvoidedEnergySensor(SmartPauseEntity, SensorEntity):
-    """Energy the equipment did not draw while paused (estimate, upper bound)."""
-
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_suggested_display_precision = 2
-
-    def __init__(self, manager) -> None:
-        super().__init__(manager, "avoided_energy")
-
-    @property
-    def native_value(self) -> float:
-        """Mean power before each pause times its duration, summed."""
-        return round(self._manager.avoided_energy_kwh, 3)
