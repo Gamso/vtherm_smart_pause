@@ -64,3 +64,30 @@ async def test_entities_are_created_by_the_manager(integration):
 
     await integration.services.async_call("switch", "turn_off", {"entity_id": "switch.salon_smart_pause_smart_pause"}, blocking=True)
     assert manager.enabled is False
+
+
+async def test_entities_follow_the_manager_of_a_reloaded_vtherm(integration):
+    """When the VTherm reloads it creates a new manager: the existing entities must read and drive that one."""
+    entry = make_entry()
+    entry.add_to_hass(integration)
+    assert await integration.config_entries.async_setup(entry.entry_id)
+    await integration.async_block_till_done()
+    factory = SmartPauseManagerFactory(integration)
+    first_runtime = FakeRuntime(integration)
+    first = factory.create(first_runtime)
+    first.post_init(first_runtime.entry_infos)
+    await first.refresh_state()
+    await integration.async_block_till_done()
+    assert integration.states.get("sensor.salon_smart_pause_state").state == "running"
+
+    # The reloaded thermostat is off: only the new manager knows it.
+    runtime = FakeRuntime(integration, vtherm_hvac_mode="off")
+    manager = factory.create(runtime)
+    manager.post_init(runtime.entry_infos)
+    await manager.refresh_state()
+    await integration.async_block_till_done()
+    assert integration.states.get("sensor.salon_smart_pause_state").state == "inactive"
+
+    await integration.services.async_call("switch", "turn_off", {"entity_id": "switch.salon_smart_pause_smart_pause"}, blocking=True)
+    assert manager.enabled is False
+    assert first.enabled is True
