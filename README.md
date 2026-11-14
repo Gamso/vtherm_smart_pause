@@ -4,8 +4,8 @@ A [Versatile Thermostat](https://github.com/jmcollin78/versatile_thermostat) (VT
 **pauses a heat pump or an air conditioner while the room does not need it and will hold without
 it**, then hands it back before comfort is at stake.
 
-> **Status: 0.2.0, not yet tried on real equipment.** Use it on one thermostat first and watch it
-> for a day.
+> **Status: 0.3.0, in test on one heat pump.** Use it on one thermostat first and watch it for a
+> day.
 
 ## Why
 
