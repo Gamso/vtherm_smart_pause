@@ -117,6 +117,15 @@
       "heat_loss": {
         "name": "Heat loss coefficient"
       },
+      "solar_gain": {
+        "name": "Solar gain"
+      },
+      "recovery_time": {
+        "name": "Recovery time"
+      },
+      "model_error": {
+        "name": "Model error"
+      },
       "pauses_today": {
         "name": "Pauses today"
       }

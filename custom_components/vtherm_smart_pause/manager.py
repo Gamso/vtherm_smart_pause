@@ -65,12 +65,15 @@ from .forecast import WeatherForecast
 from .history_learning import HVAC_OFF
 from .log import get_logger, write_event_log
 from .registry import add_entities_registry, entity_bucket, managers, merged_config
-from .thermal_model import RecoveryTracker, SegmentRecorder, SensorResolution, ThermalModel
+from .thermal_model import PauseEvaluator, RecoveryTracker, SegmentRecorder, SensorResolution, ThermalModel
 
 if TYPE_CHECKING:
     from vtherm_api.interfaces import InterfaceThermostatRuntime
 
 _LOGGER = get_logger(__name__)
+
+#: Resume reasons after which the pause can be compared with the model: the room was left alone until then.
+EVALUATED_RESUME_REASONS = ("comfort", "setpoint_change", "autonomy")
 
 
 def settings_from_config(conf: dict[str, Any]) -> Settings:
@@ -131,6 +134,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self._forecast: WeatherForecast | None = None
         self._resolution = SensorResolution()
         self._recovery = RecoveryTracker()
+        self._evaluator = PauseEvaluator()
         self._recorder: SegmentRecorder | None = None
         #: What VTherm's auto start/stop switch was last set to (True: on), None until the first write.
         self._native_applied: bool | None = None
@@ -320,8 +324,14 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             "heat_loss": round(self.model.heat_loss(mode if mode in DRIVEN_HVAC_MODES else HVAC_HEAT), 4),
             "solar_gain": round(self.model.solar_gain(mode if mode in DRIVEN_HVAC_MODES else HVAC_HEAT), 3),
             "model_ready": self.model.is_ready(mode) if mode in DRIVEN_HVAC_MODES else False,
+            "model_error": self._rounded(self.model.prediction_error(mode if mode in DRIVEN_HVAC_MODES else HVAC_HEAT)),
             "forecast": self._forecast.available if self._forecast else False,
         }
+
+    @staticmethod
+    def _rounded(value: float | None, digits: int = 2) -> float | None:
+        """Round a value that may not be known yet."""
+        return None if value is None else round(value, digits)
 
     def __str__(self) -> str:
         return f"SmartPause-{self._name}"
@@ -475,6 +485,22 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             if segment is not None and self.model.add_segment(segment):
                 _LOGGER.info("%s - learned a stop of %.1f h: k=%.4f/h", self, segment.hours, self.model.heat_loss(segment.hvac_mode))
 
+    def _evaluate_pause(self, now: float, room: float | None, reason: str) -> None:
+        """Compare the pause that just ended with what the model predicted for it.
+
+        Only a pause the room went through undisturbed is compared: one ended
+        by a window, a mode change or the switch says nothing about the model.
+        """
+        if reason not in EVALUATED_RESUME_REASONS:
+            self._evaluator.cancel()
+            return
+        predicted = self._evaluator.predicted
+        found = self._evaluator.close(now, room)
+        if found is None:
+            return
+        self.model.add_error(*found)
+        write_event_log(_LOGGER, self, f"model check: predicted {predicted:.2f} °C, measured {room} °C, error {found[1]:+.2f} °C")
+
     async def _async_bootstrap(self, now: float) -> None:
         """Learn the thermostat's past stops from the recorder history, once, while the model is empty.
 
@@ -523,6 +549,9 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         if found is not None:
             self.model.add_recovery(*found)
 
+        # Before the decision: on the cycle that resumes, the prediction must reach *now*.
+        self._evaluator.step(self.model, now, outdoor, sun)
+
         delegated = await self._async_delegation()
         driven = mode in DRIVEN_HVAC_MODES
         slope = vtherm.last_temperature_slope
@@ -543,6 +572,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         _LOGGER.debug("%s - %s", self, decision)
 
         if decision.action == Action.PAUSE:
+            self._evaluator.arm(mode, now, room)
             write_event_log(
                 _LOGGER,
                 self,
@@ -551,6 +581,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         elif decision.action == Action.RESUME:
             self._recovery.arm(mode if driven else HVAC_HEAT, now, room)
             write_event_log(_LOGGER, self, f"resume ({decision.reason}): room {room} °C")
+            self._evaluate_pause(now, room, decision.reason)
 
         if decision.action is not None or now - self._last_save >= SAVE_INTERVAL_S:
             self._last_save = now

@@ -5,6 +5,7 @@ import math
 from custom_components.vtherm_smart_pause.solar import sun_elevation, sun_factor
 from custom_components.vtherm_smart_pause.thermal_model import (
     DEFAULT_K,
+    PauseEvaluator,
     RecoveryTracker,
     Segment,
     SegmentRecorder,
@@ -164,3 +165,59 @@ def test_sun_is_up_at_noon_and_down_at_night():
     clear = sun_factor(45.0, 0.0, noon, 0.0)
     overcast = sun_factor(45.0, 0.0, noon, 100.0)
     assert abs(overcast / clear - 0.25) < 1e-9
+
+
+def test_evaluator_measures_the_error_of_the_model():
+    """A room that loses twice what the model says ends colder than predicted, by the amount the model missed."""
+    model = ThermalModel(clock=lambda: START)
+    evaluator = PauseEvaluator()
+    evaluator.arm("heat", START, 20.0)
+    room = 20.0
+    for minute in range(1, 61):
+        room += 2 * DEFAULT_K * (10.0 - room) / 60.0
+        evaluator.step(model, START + minute * 60.0, 10.0, 0.0)
+    mode, error = evaluator.close(START + 3600.0, room)
+    assert mode == "heat"
+    assert math.isclose(evaluator.predicted, 10.0 + 10.0 * math.exp(-DEFAULT_K), abs_tol=0.01)
+    assert math.isclose(error, room - evaluator.predicted, abs_tol=1e-9) and -0.8 < error < -0.6
+
+
+def test_evaluator_ignores_short_or_broken_pauses():
+    """A pause too short, a missing outdoor reading or a long gap gives no error."""
+    model = ThermalModel(clock=lambda: START)
+    evaluator = PauseEvaluator()
+    evaluator.arm("heat", START, 20.0)
+    evaluator.step(model, START + 600.0, 10.0, 0.0)
+    assert evaluator.close(START + 600.0, 19.9) is None
+    evaluator.arm("heat", START, 20.0)
+    evaluator.step(model, START + 600.0, None, 0.0)
+    assert evaluator.close(START + 3600.0, 19.0) is None
+    evaluator.arm("heat", START, 20.0)
+    evaluator.step(model, START + 7200.0, 10.0, 0.0)
+    assert evaluator.close(START + 7200.0, 19.0) is None
+    evaluator.arm("heat", START, None)
+    assert evaluator.close(START + 3600.0, 19.0) is None
+
+
+def test_errors_are_summarised_and_persisted():
+    """The model keeps the last errors per mode: median absolute error, signed bias, round trip."""
+    model = ThermalModel(clock=lambda: START)
+    assert model.prediction_error("heat") is None and model.prediction_bias("heat") is None
+    for error in (-0.4, 0.1, -0.2):
+        model.add_error("heat", error)
+    assert math.isclose(model.prediction_error("heat"), 0.2)
+    assert math.isclose(model.prediction_bias("heat"), -0.2)
+    assert model.prediction_error("cool") is None
+    restored = ThermalModel.from_dict(model.to_dict(), clock=lambda: START)
+    assert restored.errors == {"heat": [-0.4, 0.1, -0.2]}
+
+
+def test_heat_loss_range_is_the_spread_of_the_stops():
+    """k_min and k_max bound the learned k, None without a sunless stop."""
+    model = ThermalModel(clock=lambda: START)
+    assert model.heat_loss_range("heat") is None
+    for k in (0.03, 0.05, 0.04):
+        model.add_segment(_record(k, 0.0, 5.0, 20.0, 8.0))
+    low, high = model.heat_loss_range("heat")
+    assert low < model.heat_loss("heat") < high
+    assert math.isclose(low, 0.03, rel_tol=0.15) and math.isclose(high, 0.05, rel_tol=0.15)

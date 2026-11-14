@@ -136,8 +136,17 @@ For each thermostat, a device "*‹thermostat› Smart Pause*" with:
 | Switch **Smart pause** | Turns the plugin on or off for this thermostat. Off ends a pause at the next cycle. |
 | Sensor **State** | `running`, `paused` or `inactive`. Attributes: reason, profile, comfort limit. |
 | Sensor **Autonomy** | Predicted minutes the room would hold if paused now. |
-| Sensor **Heat loss coefficient** | Learned `k` (1/h). Attributes: solar gain, learned stops, readiness, recovery time. |
+| Sensor **Heat loss coefficient** | Learned `k` (1/h). Attributes: solar gain, learned stops, lowest and highest `k` over them, readiness, recovery time. |
+| Sensor **Solar gain** | Learned `g`: how fast full sun warms the room. 0 until two sunny stops are learned. |
+| Sensor **Recovery time** | Minutes the room keeps drifting after the equipment restarts. 30 until a restart was measured. |
+| Sensor **Model error** | How far the room ended from what the model predicted, over the last pauses (median, in degrees). Attributes: last error, bias, pauses evaluated. |
 | Sensor **Pauses today** | Pauses since midnight. |
+
+The last four are diagnostic sensors. **Model error** is how to judge the model: at the end of each
+pause of 30 minutes or more that the room went through undisturbed, the plugin replays the pause through
+the model with the weather actually met and compares it with the measured room temperature. The
+error and the bias are *measured − predicted*: in heating, a negative bias means the room cools
+faster than the model says. It stays unknown until a first pause is evaluated.
 
 The thermostat itself also carries a `smart_pause` attribute section (state, reason, profile,
 limit, setback, learned values). Other plugins read `smart_pause.state` to stand down

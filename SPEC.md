@@ -315,8 +315,17 @@ Each VTherm gets a device "‹VTherm› Smart Pause":
 | switch **Smart pause** | enables / disables the plugin for this VTherm |
 | sensor **State** | `running` / `paused` / `inactive`. Attributes: reason, profile, limit |
 | sensor **Autonomy** | predicted autonomy (min) |
-| sensor **Heat loss coefficient** | learned `k` (1/h). Attributes: `g`, segments, sunless segments, readiness, recovery |
+| sensor **Heat loss coefficient** | learned `k` (1/h). Attributes: `g`, segments, sunless segments, `k_min` / `k_max`, readiness, recovery |
+| sensor **Solar gain** | learned `g` (°C/h at full sun) |
+| sensor **Recovery time** | median recovery (min). Attribute: measured restarts |
+| sensor **Model error** | median absolute prediction error (°C) over the last 20 evaluated pauses. Attributes: last error, bias (both measured − predicted), evaluated pauses |
 | sensor **Pauses today** | pauses since midnight |
+
+**Model evaluation.** From a pause on, `PauseEvaluator` integrates the model cycle after cycle on the
+measured outdoor temperature and the current sun, not on the forecast, so the error is the thermal
+model's alone. At a resume for `comfort`, `setpoint_change` or `autonomy`, after at least 30 minutes,
+`measured − predicted` is stored in the model (per HVAC mode, persisted). A pause ended by a window,
+a mode change, the switch or a restart is not evaluated.
 
 Plus a `smart_pause` section in the VTherm's `extra_state_attributes`. Planned: the
 `vtherm_smart_pause_event` event (`pause` / `resume`) and an optional CSV export (§11.1).
