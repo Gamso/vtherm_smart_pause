@@ -149,8 +149,9 @@ plain function, asked only of managers created by a registered factory
 (`register_feature_manager`) whose `is_configured` is true. VTherm calls it in heat and cool only,
 after its self-regulation and before the device offset, the rounding to the step and the
 minimum-change filter. `None` keeps VTherm's value, a number replaces it and becomes
-`regulated_target_temperature`. The value is sent on VTherm's next regulation, so a pause takes
-effect within one cycle.
+`regulated_target_temperature`. VTherm computes and sends it before refreshing its plugins, so
+the plugin asks for a forced control cycle on a pause or a resume: the setpoint reaches the
+equipment at once instead of a cycle later.
 
 **Inhibition.** `set_inhibition(id, stop_underlyings=True)` shows the VTherm as `off`
 (`hvac_off_reason = hvac_off_inhibition`), sends one stop command and then blocks every command to

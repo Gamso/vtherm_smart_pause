@@ -73,6 +73,8 @@ class FakeRuntime:  # pylint: disable=too-many-instance-attributes
     is_overpowering_detected: bool = False
     cycle_min: int = 5
     epoch: float = 1_762_000_000.0
+    #: The ``force`` of every control cycle the plugin asked VTherm for.
+    control_calls: list = field(default_factory=list)
 
     def __getattribute__(self, name: str):
         """Return the HVAC modes as VTherm does: as mode objects, not strings."""
@@ -85,6 +87,12 @@ class FakeRuntime:  # pylint: disable=too-many-instance-attributes
     def now(self) -> datetime:
         """VTherm's clock."""
         return datetime.fromtimestamp(self.epoch, tz=timezone.utc)
+
+    async def async_control_heating(self, timestamp=None, force: bool = False) -> bool:
+        """Record a control cycle asked by the plugin."""
+        del timestamp
+        self.control_calls.append(force)
+        return True
 
     def advance(self, minutes: float) -> None:
         """Move the clock forward."""

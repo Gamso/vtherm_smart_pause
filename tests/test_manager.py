@@ -171,3 +171,39 @@ async def test_a_pause_ended_by_a_window_is_not_evaluated(integration):
     await _cycles(manager, runtime, 1)
     assert manager.engine.state == State.INACTIVE
     assert not manager.model.errors
+
+
+async def test_a_pause_and_a_resume_force_one_regulation(integration):
+    """A transition asks VTherm for one forced cycle, after the current one. Holding asks for nothing."""
+    manager, runtime = await _manager(integration)
+    runtime.current_temperature = 20.4
+    for _ in range(12):
+        await manager.refresh_state()
+        assert not runtime.control_calls  # never inside VTherm's running cycle
+        await integration.async_block_till_done()
+        runtime.advance(1)
+    assert manager.engine.state == State.PAUSED
+    assert runtime.control_calls == [True]
+    await _cycles(manager, runtime, 5)
+    await integration.async_block_till_done()
+    assert runtime.control_calls == [True]
+    runtime.current_temperature = 19.4
+    await _cycles(manager, runtime, 1)
+    await integration.async_block_till_done()
+    assert manager.decision.reason == "comfort"
+    assert runtime.control_calls == [True, True]
+
+
+async def test_a_failed_forced_regulation_is_survived(integration, caplog):
+    """An error in VTherm's forced cycle is logged, the plugin goes on."""
+    manager, runtime = await _manager(integration)
+
+    async def failing(timestamp=None, force=False):
+        raise RuntimeError("busy")
+
+    runtime.async_control_heating = failing
+    runtime.current_temperature = 20.4
+    await _cycles(manager, runtime, 12)
+    await integration.async_block_till_done()
+    assert manager.engine.state == State.PAUSED
+    assert "forced regulation failed" in caplog.text
