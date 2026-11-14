@@ -17,6 +17,7 @@ import pytest
 from vtherm_api.vtherm_api import VThermAPI
 
 from custom_components.vtherm_smart_pause.const import CONF_TARGET_VTHERM, DOMAIN
+from custom_components.vtherm_smart_pause.registry import managers
 
 DEPRECATION_MARKERS = ("deprecated", "will stop working", "is being removed")
 
@@ -26,6 +27,9 @@ def integration(hass, caplog):
     """Yield a hass with a clean VThermAPI. Fail on any deprecation logged about this integration."""
     caplog.set_level(logging.WARNING)
     yield hass
+    # VTherm stops its managers when it unloads: so do the tests, which drops their pending timers.
+    for manager in list(managers(hass).values()):
+        manager.stop_listening()
     VThermAPI.reset_vtherm_api()
     offending = [
         record.getMessage()
