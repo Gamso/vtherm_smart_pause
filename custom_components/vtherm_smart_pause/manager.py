@@ -593,7 +593,6 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             room=room,
             outdoor=outdoor,
             inactive_reason=self._inactive_reason(delegated),
-            model_ready=self.model.is_ready(mode) if driven else False,
             recovery_minutes=self.model.recovery_minutes(mode) if driven else 30.0,
         )
         decision = self.engine.step(inputs, lambda m, r, limit: self.model.autonomy_minutes(m, now, r, limit, weather_at, observed))

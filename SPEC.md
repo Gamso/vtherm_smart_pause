@@ -96,7 +96,7 @@ Shared: `min_run_minutes` (15), `min_off_minutes` (20), `max_pauses_per_day` (8)
 `outdoor_floor_heat` (−5 °C) / `outdoor_ceiling_cool` (40 °C), switch on.
 
 The comfort profile was calibrated on the replay of the ten days (study §8): 0.3 °C / 20 min /
-0.3 °C gives 6.2 kWh of gross energy while paused in 14 pauses, at most 3 a day, never closer than
+0.3 °C gives 8.7 kWh of gross energy while paused in 19 pauses, at most 3 a day, never closer than
 0.15 °C to the limit. The eco profile is only a fallback, for the eco side of a threshold on a
 thermostat without VTherm's auto start/stop, and is not calibrated: the dataset's nights are handled
 by VTherm's own auto start/stop.
@@ -132,7 +132,8 @@ Always the **user's** setpoint, never the regulated one. Never VTherm's `hvac_ac
 3. **Autonomy**: `predicted autonomy ≥ max(min_pause_minutes, min_off_minutes + recovery + 10 min)`
    (§6.2).
 4. **Guards**: `T_out` within the profile's bounds, `min_run_minutes` elapsed since the last resume,
-   pauses today < `max_pauses_per_day`, model ready for the comfort profile (§6.3).
+   pauses today < `max_pauses_per_day`. No wait for the model: until stops are learned, `k` is the
+   prudent default (0.08 /h), which shortens the predicted autonomy.
 
 ### 5.4 Resume: one condition is enough
 
@@ -204,7 +205,7 @@ it again.
 - **Visible**: `history_segments` (learned stops) in the VTherm's `smart_pause` attributes and in
   the heat loss sensor's attributes.
 - **Measured** on the reference dataset: 14 stops, 9 of them sunless, `k` = 0.030 /h, the
-  comfort side ready on the first cycle.
+  model learned on the first cycle.
 - **Window**: the recorded states do not say why the thermostat was off. When the VTherm has a
   window sensor (`window_sensor_entity_id`), its history is read too and a stop during which it
   was `on` at any time is dropped whole. With the automatic window detection only, such a stop is
@@ -382,9 +383,9 @@ The past data is kept: it is both the replay set and the calibration of the benc
 
 On the dataset (`tests/test_replay.py`):
 1. **Learning**: `k` from the nights in [0.02, 0.06] /h (measured: 0.030).
-2. **Capture**: at least 5.5 kWh of gross energy while paused (measured: 6.2).
+2. **Capture**: at least 8.0 kWh of gross energy while paused (measured: 8.7).
 3. **Prudence**: the simulated room never reaches the comfort limit while paused.
-4. **Compressor**: at most 20 pauses, 4 a day.
+4. **Compressor**: at most 22 pauses, 4 a day (measured: 19, 3).
 
 ### 11.4 Closed-loop bench *(planned)*
 

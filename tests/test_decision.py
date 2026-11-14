@@ -15,7 +15,7 @@ ECO = Profile(excess=0.2, excess_minutes=10.0, margin=1.0, min_pause_minutes=30.
 
 def _inputs(minute: float, room: float, setpoint: float = 20.0, hvac_mode: str = "heat", **kwargs) -> Inputs:
     """Build the inputs of one cycle at *minute* of day 1."""
-    defaults = {"model_ready": True, "recovery_minutes": 30.0, "outdoor": 10.0}
+    defaults = {"recovery_minutes": 30.0, "outdoor": 10.0}
     defaults.update(kwargs)
     return Inputs(now=minute * 60.0, day=1, hvac_mode=hvac_mode, setpoint=setpoint, room=room, **defaults)
 
@@ -57,13 +57,14 @@ def test_small_excess_never_pauses():
     assert all(d.action is None for d in _run(engine, 0, 120, 20.2))
 
 
-def test_comfort_profile_waits_for_the_model():
-    """The comfort profile needs a learned model. The eco profile does not."""
+def test_comfort_profile_does_not_wait_for_the_model():
+    """Both profiles pause on the predicted autonomy alone: an unlearned model predicts with its prudent default."""
     engine = _engine(threshold_heat=19.0)
-    decisions = _run(engine, 0, 30, 20.5, model_ready=False)
-    assert decisions[-1].reason == "model_not_ready"
+    decisions = _run(engine, 0, 30, 20.5)
+    assert any(d.action == Action.PAUSE for d in decisions)
+    assert decisions[-1].profile == "comfort"
     eco_engine = _engine(threshold_heat=19.0)
-    decisions = _run(eco_engine, 0, 30, 17.8, setpoint=17.5, model_ready=False)
+    decisions = _run(eco_engine, 0, 30, 17.8, setpoint=17.5)
     assert any(d.action == Action.PAUSE for d in decisions)
     assert decisions[-1].profile == "eco"
 

@@ -93,7 +93,6 @@ class Inputs:
     outdoor: float | None = None
     #: A reason not to decide at all (window, defrost, disabled...). None when free.
     inactive_reason: str | None = None
-    model_ready: bool = False
     recovery_minutes: float = 30.0
 
 
@@ -176,7 +175,7 @@ class DecisionEngine:
             self.state, self.paused_since, self.last_resume = State.RUNNING, None, inputs.now
             return decision(Action.RESUME, reason)
 
-        blocker = self._pause_blocker(inputs, profile_name, profile, autonomy)
+        blocker = self._pause_blocker(inputs, profile, autonomy)
         if blocker is not None:
             return decision(None, blocker)
         self.state, self.paused_since = State.PAUSED, inputs.now
@@ -214,7 +213,7 @@ class DecisionEngine:
             return "autonomy"
         return None
 
-    def _pause_blocker(self, inputs: Inputs, profile_name: str, profile: Profile, autonomy: float) -> str | None:  # pylint: disable=too-many-return-statements
+    def _pause_blocker(self, inputs: Inputs, profile: Profile, autonomy: float) -> str | None:  # pylint: disable=too-many-return-statements
         """Return the first condition that forbids a pause now, or None to pause.
 
         One return per condition, in a fixed order: the first blocker is the
@@ -225,8 +224,6 @@ class DecisionEngine:
             return "no_excess"
         if (inputs.now - self.excess_since) / 60.0 < profile.excess_minutes:
             return "excess_too_short"
-        if profile_name == PROFILE_COMFORT and not inputs.model_ready:
-            return "model_not_ready"
         needed = max(profile.min_pause_minutes, s.min_off_minutes + inputs.recovery_minutes + s.restart_buffer_minutes)
         if autonomy < needed:
             return "short_autonomy"
