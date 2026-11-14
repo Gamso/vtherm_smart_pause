@@ -50,6 +50,11 @@ def room_series(states: list[State]) -> Series:
     return [(state.last_updated.timestamp(), _number(state.attributes.get("current_temperature"))) for state in states]
 
 
+def window_series(states: list[State]) -> Series:
+    """The window sensor's state over time, None while it is unknown."""
+    return [(state.last_updated.timestamp(), state.state if _usable(state) else None) for state in states]
+
+
 def outdoor_series(states: list[State], attribute: str | None = None) -> Series:
     """The outdoor temperature over time, from a sensor's state or a weather entity's attribute."""
     return [(state.last_updated.timestamp(), _number(state.attributes.get(attribute) if attribute else state.state) if _usable(state) else None) for state in states]
@@ -62,18 +67,20 @@ async def async_history_segments(
     weather_entity: str | None,
     now: float,
     days: int = BOOTSTRAP_DAYS,
+    window_entity: str | None = None,
 ) -> list[Segment]:
     """Return the stops of the thermostat in the last *days* days, learned from the recorder.
 
     The outdoor temperature comes from the thermostat's own outdoor sensor,
-    else from the weather entity. Returns nothing when the recorder is not
-    loaded or holds nothing for the thermostat.
+    else from the weather entity. The stops with the thermostat's window sensor
+    open are dropped. Returns nothing when the recorder is not loaded or holds
+    nothing for the thermostat.
     """
     if "recorder" not in hass.config.components:
         return []
     end = dt_util.utc_from_timestamp(now)
     start = end - timedelta(days=days)
-    entity_ids = [entity_id for entity_id in (vtherm_entity_id, outdoor_entity, weather_entity) if entity_id]
+    entity_ids = [entity_id for entity_id in (vtherm_entity_id, outdoor_entity, weather_entity, window_entity) if entity_id]
     # The recorder's database is read in its own executor, never on the event loop.
     recorded = await get_instance(hass).async_add_executor_job(partial(history.get_significant_states, hass, start, end, entity_ids, None, True, False, False, False))
     thermostat = recorded.get(vtherm_entity_id) or []
@@ -91,4 +98,5 @@ async def async_history_segments(
         start.timestamp(),
         end.timestamp(),
         lambda epoch: sun_factor(latitude, longitude, epoch, None),
+        window_series(recorded.get(window_entity) or []) if window_entity else None,
     )

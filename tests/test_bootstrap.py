@@ -13,6 +13,7 @@ from custom_components.vtherm_smart_pause.manager import SmartPauseFeatureManage
 THERMOSTAT = "climate.salon"
 OUTDOOR = "sensor.outdoor"
 WEATHER = "weather.home"
+WINDOW = "binary_sensor.salon_window"
 
 
 def _state(entity_id: str, state: str, epoch: float, **attributes) -> State:
@@ -37,7 +38,7 @@ def _recorded(rows: list[dict]) -> dict[str, list[State]]:
     return {THERMOSTAT: thermostat, OUTDOOR: outdoor, WEATHER: weather}
 
 
-async def _manager(hass, recorded, outdoor_sensor: bool = True, **data) -> tuple[SmartPauseFeatureManager, FakeRuntime, MagicMock]:
+async def _manager(hass, recorded, outdoor_sensor: bool = True, window_sensor: bool = False, **data) -> tuple[SmartPauseFeatureManager, FakeRuntime, MagicMock]:
     """Build a manager whose recorder returns *recorded*. Return it with the mocked history call."""
     rows = load_rows()
     make_entry(**{CONF_WEATHER_ENTITY: WEATHER, **data}).add_to_hass(hass)
@@ -46,6 +47,8 @@ async def _manager(hass, recorded, outdoor_sensor: bool = True, **data) -> tuple
     entry_infos = {"thermostat_type": "thermostat_over_climate"}
     if outdoor_sensor:
         entry_infos["external_temperature_sensor_entity_id"] = OUTDOOR
+    if window_sensor:
+        entry_infos["window_sensor_entity_id"] = WINDOW
     runtime = FakeRuntime(hass, entity_id=THERMOSTAT, entry_infos=entry_infos)
     runtime.epoch = rows[-1]["t"] + 60.0
     fetch = MagicMock(return_value=recorded)
@@ -139,3 +142,28 @@ async def test_without_the_recorder_nothing_is_read(integration):
         await manager.refresh_state()
     assert fetch.call_count == 0
     assert not manager.model.segments
+
+
+async def test_stops_with_the_window_open_are_not_learned(integration):
+    """With the VTherm's window sensor open all along, no stop is learned from the history."""
+    rows = load_rows()
+    recorded = _recorded(rows)
+    recorded[WINDOW] = [_state(WINDOW, "on", rows[0]["t"])]
+    manager, _, fetch = await _manager(integration, recorded, window_sensor=True)
+    instance, history = _patched(fetch)
+    with instance, history:
+        await manager.refresh_state()
+    assert WINDOW in fetch.call_args.args[3]
+    assert not manager.model.segments
+
+
+async def test_a_closed_window_keeps_the_history(integration):
+    """A window sensor that stayed closed learns the same stops as no window sensor at all."""
+    rows = load_rows()
+    recorded = _recorded(rows)
+    recorded[WINDOW] = [_state(WINDOW, "off", rows[0]["t"])]
+    manager, _, fetch = await _manager(integration, recorded, window_sensor=True)
+    instance, history = _patched(fetch)
+    with instance, history:
+        await manager.refresh_state()
+    assert len(manager.model.segments) >= 10

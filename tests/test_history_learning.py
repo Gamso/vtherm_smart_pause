@@ -89,3 +89,22 @@ def test_a_stop_still_going_on_is_closed_at_the_end(rows):
     segments = learn_segments([(start, "off")], room, [(start, 5.0)], start, start + 6 * HOUR, lambda _t: 0.0)
     assert len(segments) == 1
     assert segments[0].mean_sun == 0.0
+
+
+def test_a_stop_with_the_window_open_is_dropped(rows):
+    """A window open at any time during a stop drops it whole, and the next stop is learned again."""
+    start = rows[0]["t"]
+    room = [(start, 20.4), (start + 3 * HOUR, 19.8), (start + 6 * HOUR, 19.2), (start + 12 * HOUR, 20.4), (start + 18 * HOUR, 19.2)]
+    modes = [(start, "off"), (start + 6 * HOUR, "heat"), (start + 12 * HOUR, "off")]
+    windows = [(start, "off"), (start + 2 * HOUR, "on"), (start + 2.5 * HOUR, "off")]
+    segments = learn_segments(modes, room, [(start, 5.0)], start, start + 18 * HOUR, lambda _t: 0.0, windows)
+    assert len(segments) == 1
+    assert segments[0].end > start + 12 * HOUR
+
+
+def test_a_closed_or_unknown_window_changes_nothing(rows):
+    """Closed, unknown or without a window sensor, the stop is learned."""
+    start = rows[0]["t"]
+    room = [(start, 20.4), (start + 3 * HOUR, 19.8), (start + 6 * HOUR, 19.2)]
+    for windows in (None, [], [(start, "off")], [(start, None)]):
+        assert len(learn_segments([(start, "off")], room, [(start, 5.0)], start, start + 6 * HOUR, lambda _t: 0.0, windows)) == 1

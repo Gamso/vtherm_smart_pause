@@ -205,9 +205,11 @@ it again.
   the heat loss sensor's attributes.
 - **Measured** on the reference dataset: 14 stops, 9 of them sunless, `k` = 0.030 /h, the
   comfort side ready on the first cycle.
-- **Limit**: the recorded states do not say why the thermostat was off. A stop caused by an open
-  window is read as a stop, which overestimates the loss. The median over segments and the range
-  check on `k` limit the effect.
+- **Window**: the recorded states do not say why the thermostat was off. When the VTherm has a
+  window sensor (`window_sensor_entity_id`), its history is read too and a stop during which it
+  was `on` at any time is dropped whole. With the automatic window detection only, such a stop is
+  read as a stop, which overestimates the loss; the median over segments and the range check on
+  `k` limit the effect.
 
 ### 6.5 Persistence
 

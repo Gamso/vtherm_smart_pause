@@ -158,8 +158,9 @@ during a pause.
 - VTherm's auto start/stop switch is not restored to its previous state when the plugin is removed.
 - The comfort side needs three stops of at least two hours without sun. They come from the
   recorder history at install time, or else from three nights with the thermostat off.
-- The history does not say why the thermostat was off. A stop caused by an open window is read as
-  a stop and overestimates the heat loss a little.
+- The history does not say why the thermostat was off. With a window sensor configured in the
+  VTherm, the stops with the window open are left out; with the automatic window detection only,
+  such a stop is read as a stop and overestimates the heat loss a little.
 - Not yet checked on hardware: that VTherm sends the setback when its self-regulation is set to
   "none".
 - It does not read the equipment's power, compressor or defrost entities, since not every
