@@ -6,9 +6,11 @@ cycle. Each cycle reads the thermostat, learns from real stops, asks the
 result. The pause itself goes through the setpoint-modifier contract of
 ``vtherm_api``: while paused, :meth:`adjust_regulated_temperature` returns the
 setback temperature, so the equipment's own thermostat goes idle while it stays
-on and VTherm stays in its HVAC mode. VTherm sends it on its next regulation:
-within one cycle, or later when its minimal auto-regulation period has not
-elapsed yet.
+on and VTherm stays in its HVAC mode. VTherm sends the regulated temperature
+before it refreshes its plugins, so on a pause or a resume this manager asks
+VTherm for one forced control cycle two seconds later: the new
+setpoint is sent at once, instead of a cycle later or after VTherm's minimal
+auto-regulation period.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.components.climate import HVACAction
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -71,6 +74,10 @@ if TYPE_CHECKING:
     from vtherm_api.interfaces import InterfaceThermostatRuntime
 
 _LOGGER = get_logger(__name__)
+
+#: Delay before the forced control cycle asked on a pause or a resume. A task started at once would
+#: run at the first await, inside VTherm's current cycle; VTherm defers its own late sends the same way.
+FORCED_REGULATION_DELAY_S = 2.0
 
 #: Resume reasons after which the pause can be compared with the model: the room was left alone until then.
 EVALUATED_RESUME_REASONS = ("comfort", "setpoint_change", "autonomy")
@@ -140,6 +147,9 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self._native_applied: bool | None = None
         self._native_missing_logged = False
         self._decision: Decision | None = None
+        #: Cancels the forced control cycle scheduled on the last pause or resume, while it is pending.
+        self._regulation_cancel = None
+        self._regulation_running = False
         self._listeners: list = []
         self._entity_listeners: list = []
 
@@ -157,9 +167,12 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         await self._async_ensure_loaded()
 
     def stop_listening(self) -> bool | None:
-        """Remove every listener registered through :meth:`add_listener`."""
+        """Remove every listener registered through :meth:`add_listener`, and drop a pending forced cycle."""
         while self._listeners:
             self._listeners.pop()()
+        if self._regulation_cancel is not None:
+            self._regulation_cancel()
+            self._regulation_cancel = None
 
     async def refresh_state(self) -> bool:
         """Run one cycle. Returns True when the pause state changed."""
@@ -583,7 +596,36 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             write_event_log(_LOGGER, self, f"resume ({decision.reason}): room {room} °C")
             self._evaluate_pause(now, room, decision.reason)
 
+        if decision.action is not None:
+            self._request_regulation()
         if decision.action is not None or now - self._last_save >= SAVE_INTERVAL_S:
             self._last_save = now
             await self.async_save()
         return decision.action is not None
+
+    def _request_regulation(self) -> None:
+        """Ask VTherm for one forced control cycle, a moment after the current one.
+
+        VTherm sends the regulated temperature before it refreshes its plugins:
+        without this, a pause or a resume decided now would reach the equipment
+        a cycle later, or once VTherm's minimal auto-regulation period has
+        elapsed. Asked on transitions only, which the decision engine's guards
+        bound (minimum run, minimum pause, pauses per day): it changes when the
+        setpoint is sent, not how often the equipment stops.
+        """
+        if self._regulation_cancel is not None or self._regulation_running:
+            return
+        if not callable(getattr(self._vtherm, "async_control_heating", None)):
+            return
+        self._regulation_cancel = async_call_later(self._hass, FORCED_REGULATION_DELAY_S, self._async_force_regulation)
+
+    async def _async_force_regulation(self, _now: datetime) -> None:
+        """Run VTherm's forced control cycle. A failure is logged: the next regular cycle sends the setpoint anyway."""
+        self._regulation_cancel = None
+        self._regulation_running = True
+        try:
+            await self._vtherm.async_control_heating(force=True)
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.warning("%s - the forced regulation failed, the setpoint goes with the next cycle", self, exc_info=True)
+        finally:
+            self._regulation_running = False

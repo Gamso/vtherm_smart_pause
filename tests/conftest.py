@@ -17,6 +17,7 @@ import pytest
 from vtherm_api.vtherm_api import VThermAPI
 
 from custom_components.vtherm_smart_pause.const import CONF_TARGET_VTHERM, DOMAIN
+from custom_components.vtherm_smart_pause.registry import managers
 
 DEPRECATION_MARKERS = ("deprecated", "will stop working", "is being removed")
 
@@ -26,6 +27,9 @@ def integration(hass, caplog):
     """Yield a hass with a clean VThermAPI. Fail on any deprecation logged about this integration."""
     caplog.set_level(logging.WARNING)
     yield hass
+    # VTherm stops its managers when it unloads: so do the tests, which drops their pending timers.
+    for manager in list(managers(hass).values()):
+        manager.stop_listening()
     VThermAPI.reset_vtherm_api()
     offending = [
         record.getMessage()
@@ -73,6 +77,8 @@ class FakeRuntime:  # pylint: disable=too-many-instance-attributes
     is_overpowering_detected: bool = False
     cycle_min: int = 5
     epoch: float = 1_762_000_000.0
+    #: The ``force`` of every control cycle the plugin asked VTherm for.
+    control_calls: list = field(default_factory=list)
 
     def __getattribute__(self, name: str):
         """Return the HVAC modes as VTherm does: as mode objects, not strings."""
@@ -85,6 +91,12 @@ class FakeRuntime:  # pylint: disable=too-many-instance-attributes
     def now(self) -> datetime:
         """VTherm's clock."""
         return datetime.fromtimestamp(self.epoch, tz=timezone.utc)
+
+    async def async_control_heating(self, timestamp=None, force: bool = False) -> bool:
+        """Record a control cycle asked by the plugin."""
+        del timestamp
+        self.control_calls.append(force)
+        return True
 
     def advance(self, minutes: float) -> None:
         """Move the clock forward."""
