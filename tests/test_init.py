@@ -56,7 +56,11 @@ async def test_entities_are_created_by_the_manager(integration):
     await integration.async_block_till_done()
     assert integration.states.get("sensor.salon_smart_pause_state").state == "running"
     assert integration.states.get("switch.salon_smart_pause_smart_pause").state == "on"
-    assert integration.states.get("sensor.salon_smart_pause_heat_loss_coefficient") is not None
+    # The runtime is in heat: the model is read with VTherm's mode object, which is unhashable.
+    heat_loss = integration.states.get("sensor.salon_smart_pause_heat_loss_coefficient")
+    assert float(heat_loss.state) == 0.08
+    assert heat_loss.attributes["recovery_minutes"] == 30.0
+    assert manager.decision is not None and manager.decision.reason == "no_excess"
 
     await integration.services.async_call("switch", "turn_off", {"entity_id": "switch.salon_smart_pause_smart_pause"}, blocking=True)
     assert manager.enabled is False

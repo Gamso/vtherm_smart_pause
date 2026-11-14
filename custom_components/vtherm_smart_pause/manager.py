@@ -208,7 +208,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         del regulation_step
         if self.engine.state != State.PAUSED or command_cause == COMMAND_CAUSE_UNDERLYING_TRACKING:
             return None
-        mode = self._vtherm.vtherm_hvac_mode
+        mode = self.hvac_mode
         if mode == HVAC_HEAT:
             return min(desired, self.setback(HVAC_HEAT))
         if mode == HVAC_COOL:
@@ -227,6 +227,22 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
     def vtherm_unique_id(self) -> str:
         """The unique_id of the bound VTherm."""
         return self._vtherm.unique_id
+
+    @property
+    def hvac_mode(self) -> str | None:
+        """VTherm's effective HVAC mode as a plain string.
+
+        VTherm returns its own mode object, which compares equal to a string
+        but is not hashable: it must never reach a dict key or the Store.
+        """
+        mode = self._vtherm.vtherm_hvac_mode
+        return None if mode is None else str(mode)
+
+    @property
+    def requested_hvac_mode(self) -> str | None:
+        """The HVAC mode the user asked for, before feature overrides, as a plain string."""
+        mode = self._vtherm.requested_hvac_mode
+        return None if mode is None else str(mode)
 
     @property
     def entry_id(self) -> str:
@@ -284,7 +300,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         while the equipment is paused.
         """
         decision = self._decision
-        mode = self._vtherm.vtherm_hvac_mode or HVAC_HEAT
+        mode = self.hvac_mode or HVAC_HEAT
         extra_state_attributes[ATTR_SECTION] = {
             "enabled": self.enabled,
             "state": str(self.engine.state),
@@ -372,9 +388,9 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         Read on the requested HVAC mode: once VTherm's auto start/stop has
         switched the equipment off, the effective mode is ``off``.
         """
-        mode = self._vtherm.requested_hvac_mode
+        mode = self.requested_hvac_mode
         if mode not in DRIVEN_HVAC_MODES:
-            mode = self._vtherm.vtherm_hvac_mode
+            mode = self.hvac_mode
         setpoint = self._vtherm.target_temperature
         if mode not in DRIVEN_HVAC_MODES or setpoint is None:
             return False
@@ -439,7 +455,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         defrosts) or a pause of this plugin. Its HVAC mode is what the physics says: heating when
         outside is colder.
         """
-        mode = self._vtherm.vtherm_hvac_mode
+        mode = self.hvac_mode
         off_reason = self._vtherm.hvac_off_reason
         stopped = (mode == HVAC_OFF and off_reason != HVAC_OFF_REASON_WINDOW) or self.engine.state == State.PAUSED
         if stopped and self._vtherm.hvac_action != HVACAction.DEFROSTING:
@@ -483,7 +499,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         vtherm = self._vtherm
         room = vtherm.current_temperature
         outdoor = vtherm.current_outdoor_temperature
-        mode = vtherm.vtherm_hvac_mode
+        mode = self.hvac_mode
         self._resolution.update(room)
         if self._forecast is not None:
             await self._forecast.async_refresh(now)

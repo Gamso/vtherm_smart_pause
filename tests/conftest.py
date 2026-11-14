@@ -35,6 +35,23 @@ def integration(hass, caplog):
     assert not offending, offending
 
 
+class FakeHvacMode:
+    """A look-alike of VTherm's ``VThermHvacMode``: equal to its string, and unhashable.
+
+    Defining ``__eq__`` without ``__hash__`` is what makes the real class
+    unusable as a dict key, so the fake must keep that trap.
+    """
+
+    def __init__(self, hvac_mode: str) -> None:
+        self._hvac_mode = hvac_mode
+
+    def __str__(self) -> str:
+        return self._hvac_mode
+
+    def __eq__(self, other: object) -> bool:
+        return self._hvac_mode == str(other)
+
+
 @dataclass
 class FakeRuntime:  # pylint: disable=too-many-instance-attributes
     """A stand-in for VTherm's InterfaceThermostatRuntime, with settable readings."""
@@ -56,6 +73,13 @@ class FakeRuntime:  # pylint: disable=too-many-instance-attributes
     is_overpowering_detected: bool = False
     cycle_min: int = 5
     epoch: float = 1_762_000_000.0
+
+    def __getattribute__(self, name: str):
+        """Return the HVAC modes as VTherm does: as mode objects, not strings."""
+        value = super().__getattribute__(name)
+        if name in ("vtherm_hvac_mode", "requested_hvac_mode") and isinstance(value, str):
+            return FakeHvacMode(value)
+        return value
 
     @property
     def now(self) -> datetime:
