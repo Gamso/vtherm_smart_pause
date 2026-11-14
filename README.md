@@ -140,7 +140,7 @@ For each thermostat, a device "*‹thermostat› Smart Pause*" with:
 | Sensor **Pauses today** | Pauses since midnight. |
 
 The thermostat itself also carries a `smart_pause` attribute section (state, reason, profile,
-autonomy, limit, setback, learned values). Other plugins read `smart_pause.state` to stand down
+limit, setback, learned values). Other plugins read `smart_pause.state` to stand down
 during a pause.
 
 ## Limits of this version
