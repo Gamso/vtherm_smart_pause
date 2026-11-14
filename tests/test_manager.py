@@ -143,3 +143,31 @@ async def test_defrost_is_not_learned(integration):
     runtime.hvac_action = "defrosting"
     await _cycles(manager, runtime, 5)
     assert manager._recorder is None  # noqa: SLF001
+
+
+async def test_a_finished_pause_is_compared_with_the_model(integration):
+    """A pause ended by the room itself leaves a prediction error: measured minus predicted."""
+    manager, runtime = await _paused(integration)
+    await _cycles(manager, runtime, 40)
+    assert manager.engine.state == State.PAUSED
+    runtime.current_temperature = 19.4
+    await _cycles(manager, runtime, 1)
+    assert manager.decision.reason == "comfort"
+    # The model (k = 0.08/h, 10 °C outside) expected about 19.85 °C after 40 minutes from 20.4 °C.
+    (error,) = manager.model.errors["heat"]
+    assert -0.55 < error < -0.35
+    attributes: dict = {}
+    manager.add_custom_attributes(attributes)
+    assert attributes[ATTR_SECTION]["model_error"] == round(abs(error), 2)
+
+
+async def test_a_pause_ended_by_a_window_is_not_evaluated(integration):
+    """A pause the room did not go through undisturbed says nothing about the model."""
+    manager, runtime = await _paused(integration)
+    await _cycles(manager, runtime, 40)
+    runtime.vtherm_hvac_mode = "off"
+    runtime.hvac_off_reason = HVAC_OFF_REASON_WINDOW
+    runtime.current_temperature = 18.0
+    await _cycles(manager, runtime, 1)
+    assert manager.engine.state == State.INACTIVE
+    assert not manager.model.errors

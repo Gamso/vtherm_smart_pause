@@ -66,6 +66,12 @@ STEP_MINUTES = 5.0
 DEFAULT_RECOVERY_MINUTES = 30.0
 RECOVERY_GIVE_UP_MINUTES = 180.0
 MAX_RECOVERIES = 20
+#: Evaluation of the model on this plugin's own pauses. A pause shorter than
+#: this moves the room less than a sensor step and says nothing.
+MIN_EVALUATION_MINUTES = 30.0
+#: A gap between two readings longer than this (a restart) voids the evaluation.
+MAX_EVALUATION_GAP_MINUTES = 30.0
+MAX_ERRORS = 20
 
 #: (epoch seconds) -> (outdoor temperature, sun in [0, 1]). None outdoor means unknown.
 WeatherAt = Callable[[float], tuple[float | None, float]]
@@ -174,6 +180,8 @@ class ThermalModel:
         self.segments: list[Segment] = []
         #: Minutes the room took to turn back after a restart, per HVAC mode.
         self.recoveries: dict[str, list[float]] = {}
+        #: Prediction errors (°C, measured - predicted) of the last evaluated pauses, per HVAC mode.
+        self.errors: dict[str, list[float]] = {}
 
     # ------------------------------------------------------------------
     # Learning
@@ -193,6 +201,12 @@ class ThermalModel:
         values = self.recoveries.setdefault(hvac_mode, [])
         values.append(minutes)
         del values[:-MAX_RECOVERIES]
+
+    def add_error(self, hvac_mode: str, error: float) -> None:
+        """Store the prediction error of one pause (°C, measured - predicted)."""
+        values = self.errors.setdefault(hvac_mode, [])
+        values.append(error)
+        del values[:-MAX_ERRORS]
 
     def _prune(self) -> None:
         """Keep the recent segments, and the newest ones whatever their age."""
@@ -226,6 +240,26 @@ class ThermalModel:
         if len(pairs) < MIN_SUN_SEGMENTS:
             return 0.0
         return max(0.0, _weighted_median(pairs))
+
+    def heat_loss_range(self, hvac_mode: str) -> tuple[float, float] | None:
+        """Lowest and highest k over the sunless segments: how much the learned stops agree. None without any."""
+        values = [s.rise / s.exposure for s in self._mode_segments(hvac_mode) if s.mean_sun < SUNLESS_MEAN_SUN]
+        return (min(values), max(values)) if values else None
+
+    def prediction_error(self, hvac_mode: str) -> float | None:
+        """Median absolute prediction error (°C) over the last evaluated pauses, None before the first one."""
+        values = self.errors.get(hvac_mode) or []
+        return median(abs(value) for value in values) if values else None
+
+    def prediction_bias(self, hvac_mode: str) -> float | None:
+        """Median signed prediction error (°C, measured - predicted), None before the first evaluated pause.
+
+        Positive: the room ends warmer than the model predicted. In heating the
+        model then overestimates the loss (pauses are shorter than they could
+        be), in cooling it underestimates the gain.
+        """
+        values = self.errors.get(hvac_mode) or []
+        return median(values) if values else None
 
     def recovery_minutes(self, hvac_mode: str) -> float:
         """Median time the room takes to turn back after a restart."""
@@ -286,6 +320,7 @@ class ThermalModel:
             "format": MODEL_FORMAT,
             "segments": [asdict(s) for s in self.segments],
             "recoveries": {mode: list(values) for mode, values in self.recoveries.items()},
+            "errors": {mode: list(values) for mode, values in self.errors.items()},
         }
 
     @classmethod
@@ -301,6 +336,8 @@ class ThermalModel:
                 continue
         for mode, values in (data.get("recoveries") or {}).items():
             model.recoveries[str(mode)] = [float(v) for v in values if isinstance(v, (int, float))][-MAX_RECOVERIES:]
+        for mode, values in (data.get("errors") or {}).items():
+            model.errors[str(mode)] = [float(v) for v in values if isinstance(v, (int, float))][-MAX_ERRORS:]
         return model
 
 
@@ -341,3 +378,52 @@ class RecoveryTracker:
             mode, self.hvac_mode = self.hvac_mode, None
             return mode, (self.worst_at - self.start) / 60.0
         return None
+
+
+@dataclass
+class PauseEvaluator:
+    """Replay one pause through the model and compare it with the room.
+
+    From the pause on, the model is integrated cycle after cycle on the outdoor
+    temperature and the sun actually met, not on the forecast: the difference
+    with the measured room at the resume is the error of the thermal model
+    alone. It starts at the pause itself, residual heat included, since that is
+    the trajectory the decision relied on.
+    """
+
+    hvac_mode: str | None = None
+    start: float = 0.0
+    last: float = 0.0
+    predicted: float = 0.0
+
+    def arm(self, hvac_mode: str, now: float, room: float | None) -> None:
+        """Start from the room temperature at the pause."""
+        if room is None:
+            self.hvac_mode = None
+            return
+        self.hvac_mode, self.start, self.last, self.predicted = hvac_mode, now, now, room
+
+    def cancel(self) -> None:
+        """Give this pause up: it ended for a reason the model does not describe (a window, a mode change)."""
+        self.hvac_mode = None
+
+    def step(self, model: "ThermalModel", now: float, outdoor: float | None, sun: float) -> None:
+        """Advance the predicted temperature to *now*. A missing reading or a long gap voids the evaluation."""
+        if self.hvac_mode is None:
+            return
+        hours = (now - self.last) / 3600.0
+        if outdoor is None or hours * 60.0 > MAX_EVALUATION_GAP_MINUTES:
+            self.hvac_mode = None
+            return
+        if hours <= 0:
+            return
+        drift = model.heat_loss(self.hvac_mode) * (outdoor - self.predicted) + model.solar_gain(self.hvac_mode) * max(0.0, min(1.0, sun))
+        self.predicted += drift * hours
+        self.last = now
+
+    def close(self, now: float, room: float | None) -> tuple[str, float] | None:
+        """End the pause. Return ``(hvac_mode, measured - predicted)`` in °C, None when it cannot be evaluated."""
+        mode, self.hvac_mode = self.hvac_mode, None
+        if mode is None or room is None or (now - self.start) / 60.0 < MIN_EVALUATION_MINUTES:
+            return None
+        return mode, room - self.predicted

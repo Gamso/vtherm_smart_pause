@@ -61,6 +61,12 @@ async def test_entities_are_created_by_the_manager(integration):
     assert float(heat_loss.state) == 0.08
     assert heat_loss.attributes["recovery_minutes"] == 30.0
     assert manager.decision is not None and manager.decision.reason == "no_excess"
+    # The model's diagnostics: nothing learned yet, no pause evaluated yet.
+    assert float(integration.states.get("sensor.salon_smart_pause_solar_gain").state) == 0.0
+    assert float(integration.states.get("sensor.salon_smart_pause_recovery_time").state) == 30.0
+    model_error = integration.states.get("sensor.salon_smart_pause_model_error")
+    assert model_error.state == "unknown"
+    assert model_error.attributes["evaluated_pauses"] == 0
 
     await integration.services.async_call("switch", "turn_off", {"entity_id": "switch.salon_smart_pause_smart_pause"}, blocking=True)
     assert manager.enabled is False
