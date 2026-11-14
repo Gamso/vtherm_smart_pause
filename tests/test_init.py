@@ -97,3 +97,15 @@ async def test_entities_follow_the_manager_of_a_reloaded_vtherm(integration):
     await integration.services.async_call("switch", "turn_off", {"entity_id": "switch.salon_smart_pause_smart_pause"}, blocking=True)
     assert manager.enabled is False
     assert first.enabled is True
+
+
+async def test_factory_skips_an_entry_being_unloaded(integration):
+    """While the plugin's entry unloads it reloads the VTherm, which must not get a new manager then."""
+    from homeassistant.config_entries import ConfigEntryState  # pylint: disable=import-outside-toplevel
+
+    entry = make_entry()
+    entry.add_to_hass(integration)
+    factory = SmartPauseManagerFactory(integration)
+    assert factory.supports(FakeRuntime(integration))
+    entry.mock_state(integration, ConfigEntryState.UNLOAD_IN_PROGRESS)
+    assert not factory.supports(FakeRuntime(integration))

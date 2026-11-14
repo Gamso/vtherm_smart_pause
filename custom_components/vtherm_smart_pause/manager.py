@@ -84,6 +84,19 @@ FORCED_REGULATION_DELAY_S = 2.0
 EVALUATED_RESUME_REASONS = ("comfort", "setpoint_change", "autonomy")
 
 
+def native_switch(hass: HomeAssistant, vtherm_unique_id: str) -> str | None:
+    """Entity id of VTherm's own auto start/stop switch, None when that feature is not configured.
+
+    VTherm creates it under the thermostat's config entry, whose entry_id is
+    the thermostat's unique_id, with a unique_id ending in ``_enable_auto_start_stop``.
+    """
+    registry = er.async_get(hass)
+    for entry in er.async_entries_for_config_entry(registry, vtherm_unique_id):
+        if entry.domain == "switch" and entry.unique_id.endswith(VTHERM_AUTO_START_STOP_SUFFIX):
+            return entry.entity_id
+    return None
+
+
 def settings_from_config(conf: dict[str, Any]) -> Settings:
     """Build the decision settings from a config entry's merged data and options."""
     defaults = Settings()
@@ -146,6 +159,8 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self._recorder: SegmentRecorder | None = None
         #: What VTherm's auto start/stop switch was last set to (True: on), None until the first write.
         self._native_applied: bool | None = None
+        #: What that switch was before this plugin first wrote it (True: on), restored when the plugin is removed.
+        self._native_before: bool | None = None
         self._native_missing_logged = False
         self._decision: Decision | None = None
         #: Cancels the forced control cycle scheduled on the last pause or resume, while it is pending.
@@ -379,6 +394,8 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self.engine.restore(data.get("engine"))
         self.enabled = bool(data.get("enabled", True))
         self.history_segments = int(data.get("history_segments") or 0)
+        before = data.get("native_before")
+        self._native_before = before if isinstance(before, bool) else None
         self._bootstrap_pending = not self.model.segments
         self._loaded = True
         _LOGGER.info("%s - loaded (%d learned segments, state %s)", self, len(self.model.segments), self.engine.state)
@@ -393,6 +410,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
                 "engine": self.engine.to_dict(),
                 "enabled": self.enabled,
                 "history_segments": self.history_segments,
+                "native_before": self._native_before,
             }
         )
 
@@ -400,16 +418,8 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
     # The cycle
     # ------------------------------------------------------------------
     def _native_switch(self) -> str | None:
-        """Entity id of VTherm's own auto start/stop switch, None when that feature is not configured.
-
-        VTherm creates it under the thermostat's config entry, whose entry_id is
-        the thermostat's unique_id, with a unique_id ending in ``_enable_auto_start_stop``.
-        """
-        registry = er.async_get(self._hass)
-        for entry in er.async_entries_for_config_entry(registry, self._vtherm.unique_id):
-            if entry.domain == "switch" and entry.unique_id.endswith(VTHERM_AUTO_START_STOP_SUFFIX):
-                return entry.entity_id
-        return None
+        """Entity id of VTherm's own auto start/stop switch for this thermostat, None when not configured."""
+        return native_switch(self._hass, self._vtherm.unique_id)
 
     def _eco_side(self) -> bool:
         """Whether the user's setpoint is on the eco side of the threshold.
@@ -439,6 +449,10 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self._native_applied = delegated
         if (state.state == STATE_ON) == delegated:
             return
+        if self._native_before is None:
+            # Kept once and for all: the state the owner had chosen, put back when the plugin is removed.
+            self._native_before = state.state == STATE_ON
+            await self.async_save()
         write_event_log(_LOGGER, self, f"VTherm auto start/stop {'enabled (eco, delegated)' if delegated else 'disabled (smart pause decides)'}")
         # Not blocking: the switch updates this very VTherm, whose control cycle is running.
         await self._hass.services.async_call("switch", "turn_on" if delegated else "turn_off", {"entity_id": switch}, blocking=False)

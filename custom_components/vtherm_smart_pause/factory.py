@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from homeassistant.config_entries import ConfigEntryState
+
 from .const import CONF_TARGET_VTHERM, CONF_THERMOSTAT_CLIMATE, CONF_THERMOSTAT_TYPE, DOMAIN, FEATURE_MANAGER_NAME
 from .log import get_logger
 from .manager import SmartPauseFeatureManager
@@ -46,7 +48,11 @@ class SmartPauseManagerFactory:
         return self._is_configured_for(thermostat)
 
     def _is_configured_for(self, thermostat: "InterfaceThermostatRuntime") -> bool:
-        """Return True when a config entry targets this VTherm."""
+        """Return True when a config entry targets this VTherm and is not being unloaded.
+
+        The plugin reloads the VTherm while its entry unloads, so that the
+        VTherm drops the manager: it must not get a new one there.
+        """
         config_entries = getattr(self._hass, "config_entries", None)
         if config_entries is None:
             return False
@@ -54,7 +60,8 @@ class SmartPauseManagerFactory:
             entries = config_entries.async_entries(DOMAIN)
         except Exception:  # pylint: disable=broad-except
             return False
-        return any(entry.data.get(CONF_TARGET_VTHERM) == thermostat.unique_id for entry in entries)
+        unloading = (ConfigEntryState.UNLOAD_IN_PROGRESS, ConfigEntryState.FAILED_UNLOAD)
+        return any(entry.data.get(CONF_TARGET_VTHERM) == thermostat.unique_id and entry.state not in unloading for entry in entries)
 
     def create(self, thermostat: "InterfaceThermostatRuntime") -> "InterfaceFeatureManager":
         """Create a manager bound to the runtime thermostat."""
