@@ -93,7 +93,6 @@ class Inputs:
     outdoor: float | None = None
     #: A reason not to decide at all (window, defrost, disabled...). None when free.
     inactive_reason: str | None = None
-    model_ready: bool = False
     recovery_minutes: float = 30.0
 
 
@@ -225,8 +224,6 @@ class DecisionEngine:
             return "no_excess"
         if (inputs.now - self.excess_since) / 60.0 < profile.excess_minutes:
             return "excess_too_short"
-        if profile_name == PROFILE_COMFORT and not inputs.model_ready:
-            return "model_not_ready"
         needed = max(profile.min_pause_minutes, s.min_off_minutes + inputs.recovery_minutes + s.restart_buffer_minutes)
         if autonomy < needed:
             return "short_autonomy"

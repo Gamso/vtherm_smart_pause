@@ -270,8 +270,11 @@ weighted by the cloud cover, is a good start.
 
 ### 6.3 Cold start
 
-Until `k` is learned: eco profile only, with a prudent `k` (high loss) and wide margins. The
-comfort profile only comes in with a `k` measured over enough stops.
+Until `k` is learned, both profiles predict with a prudent `k` (0.08 /h, a poorly insulated room,
+against 0.030 measured here). A larger loss gives a shorter predicted autonomy: the plugin pauses
+less than it could, never longer, and the resume on comfort is measured, not predicted. An earlier
+version kept the comfort profile off until three sunless stops were learned; it never paused for
+someone who never turns the heating off, since the plugin's own pauses are too short to learn from.
 
 ## 7. Intelligent Heating Pilot (IHP): what to reuse?
 
@@ -311,12 +314,16 @@ Grid: excess ∈ {0.2, 0.3, 0.4} °C, duration ∈ {10, 20, 30} min, margin ∈ 
 
 | Excess / duration / margin | Energy while paused | Pauses | Max per day | Worst gap to the limit |
 |---|---|---|---|---|
-| 0.2 / 20 / 0.3 | 9.4 kWh | 25 | 6 | +0.15 °C |
-| **0.3 / 20 / 0.3** (chosen) | **6.2 kWh** | **14** | **3** | **+0.15 °C** |
-| 0.3 / 30 / 0.3 | 4.1 kWh | 10 | 3 | +0.15 °C |
+| 0.2 / 20 / 0.3 | 12.2 kWh | 35 | 6 | +0.15 °C |
+| **0.3 / 20 / 0.3** (chosen) | **8.7 kWh** | **19** | **3** | **+0.15 °C** |
+| 0.3 / 30 / 0.3 | 6.0 kWh | 14 | 3 | +0.15 °C |
+
+The comfort profile pauses from the first day, on the prudent default `k` until the nights are
+learned (§6.3). The replay does not read the history at start-up, so the first three days are where
+it differs from a gated comfort profile (6.2 kWh, 14 pauses for the chosen settings).
 
 With a 0.2 °C room sensor, an excess of 0.3 °C means waiting for 0.4 °C: the plugin targets clear
-episodes. 0.2 °C captures 50 % more gross energy but doubles the pauses, hence the compressor
+episodes. 0.2 °C captures 40 % more gross energy but nearly doubles the pauses, hence the compressor
 restarts, for a smaller net saving. The minimum predicted autonomy (60 min) has no effect on this
 dataset: in mild weather the predicted autonomy always exceeds an hour. The heat-loss coefficient
 learned online from the nights is 0.030 /h. The eco profile is not calibrated: the dataset's nights

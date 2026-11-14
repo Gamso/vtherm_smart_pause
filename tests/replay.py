@@ -132,7 +132,6 @@ def run_replay(settings: Settings | None = None, rows: list[dict] | None = None)
             setpoint=row["setpoint"],
             room=room,
             outdoor=row["outdoor"],
-            model_ready=model.is_ready(mode) if mode else False,
             recovery_minutes=model.recovery_minutes(mode) if mode else 30.0,
         )
         decision = engine.step(inputs, lambda m, r, lim, now=now: model.autonomy_minutes(m, now, r, lim, weather_at))

@@ -29,7 +29,8 @@ On every VTherm control cycle the plugin:
 1. **Learns** how fast the room drifts toward the outdoor temperature when the equipment is
    stopped, and how much the sun warms it (`dT/dt = k · (T_out − T_in) + g · sun`). It learns from
    real stops only: nights with the thermostat off, and its own pauses. At install time it reads
-   the last ten days of Home Assistant's history, so it is usually ready on the first cycle.
+   the last ten days of Home Assistant's history. Until it has learned, it predicts with a
+   prudent default (a poorly insulated room), so it pauses less, never longer.
 2. **Predicts** how long the room would hold, equipment paused, before crossing its comfort limit,
    using the weather forecast for the outdoor temperature and the clouds.
 3. **Pauses** when the room has been past the setpoint long enough and will hold long enough without
@@ -155,8 +156,6 @@ during a pause.
 ## Limits of this version
 
 - Pauses by setback only. The full stop (VTherm inhibition) is planned.
-- The comfort side needs three stops of at least two hours without sun. They come from the
-  recorder history at install time, or else from three nights with the thermostat off.
 - The history does not say why the thermostat was off. With a window sensor configured in the
   VTherm, the stops with the window open are left out; with the automatic window detection only,
   such a stop is read as a stop and overestimates the heat loss a little.
