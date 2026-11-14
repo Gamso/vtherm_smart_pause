@@ -6,8 +6,9 @@ cycle. Each cycle reads the thermostat, learns from real stops, asks the
 result. The pause itself goes through the setpoint-modifier contract of
 ``vtherm_api``: while paused, :meth:`adjust_regulated_temperature` returns the
 setback temperature, so the equipment's own thermostat goes idle while it stays
-on and VTherm stays in its HVAC mode. VTherm sends it on its next regulation,
-so a pause or a resume takes effect within one cycle.
+on and VTherm stays in its HVAC mode. VTherm sends it on its next regulation:
+within one cycle, or later when its minimal auto-regulation period has not
+elapsed yet.
 """
 
 from __future__ import annotations
@@ -110,10 +111,6 @@ def settings_from_config(conf: dict[str, Any]) -> Settings:
 
 class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
     """Pause the equipment of one VTherm when the room does not need it."""
-
-    #: Recorder can only filter top-level keys, so every attribute this manager
-    #: publishes on the VTherm lives under one section, declared here.
-    unrecorded_attributes = frozenset({ATTR_SECTION})
 
     def __init__(self, thermostat: "InterfaceThermostatRuntime", hass: HomeAssistant) -> None:
         self._vtherm = thermostat
@@ -304,7 +301,9 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         """Expose the decision inside the VTherm's own state attributes.
 
         ``state`` is what another plugin (vtherm_mpc_fan) reads to stand down
-        while the equipment is paused.
+        while the equipment is paused. VTherm excludes only its own managers'
+        attributes from the recorder, so this section is recorded: it carries
+        nothing that changes on every cycle (the autonomy has its own sensor).
         """
         decision = self._decision
         mode = self.hvac_mode or HVAC_HEAT
@@ -313,7 +312,6 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             "state": str(self.engine.state),
             "reason": decision.reason if decision else None,
             "profile": decision.profile if decision else None,
-            "autonomy_minutes": round(decision.autonomy_minutes) if decision and decision.autonomy_minutes is not None else None,
             "limit": decision.limit if decision else None,
             "setback": self.setback(mode) if mode in DRIVEN_HVAC_MODES else None,
             "pauses_today": self.engine.pauses_today,
