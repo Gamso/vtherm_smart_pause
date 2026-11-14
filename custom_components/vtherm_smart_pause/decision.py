@@ -175,7 +175,7 @@ class DecisionEngine:
             self.state, self.paused_since, self.last_resume = State.RUNNING, None, inputs.now
             return decision(Action.RESUME, reason)
 
-        blocker = self._pause_blocker(inputs, profile_name, profile, autonomy)
+        blocker = self._pause_blocker(inputs, profile, autonomy)
         if blocker is not None:
             return decision(None, blocker)
         self.state, self.paused_since = State.PAUSED, inputs.now
@@ -213,7 +213,7 @@ class DecisionEngine:
             return "autonomy"
         return None
 
-    def _pause_blocker(self, inputs: Inputs, profile_name: str, profile: Profile, autonomy: float) -> str | None:  # pylint: disable=too-many-return-statements
+    def _pause_blocker(self, inputs: Inputs, profile: Profile, autonomy: float) -> str | None:  # pylint: disable=too-many-return-statements
         """Return the first condition that forbids a pause now, or None to pause.
 
         One return per condition, in a fixed order: the first blocker is the
