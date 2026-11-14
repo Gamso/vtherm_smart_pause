@@ -63,7 +63,7 @@ from .decision import DRIVEN_HVAC_MODES, HVAC_COOL, HVAC_HEAT, PROFILE_ECO, Acti
 from .forecast import WeatherForecast
 from .history_learning import HVAC_OFF
 from .log import get_logger, write_event_log
-from .registry import add_entities_registry, managers, merged_config
+from .registry import add_entities_registry, entity_bucket, managers, merged_config
 from .thermal_model import RecoveryTracker, SegmentRecorder, SensorResolution, ThermalModel
 
 if TYPE_CHECKING:
@@ -271,7 +271,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         await self.async_save()
 
     def ensure_entities(self) -> None:
-        """Create this plugin's entities once their platform callbacks are up."""
+        """Create this plugin's entities once their platform callbacks are up, and take over the existing ones."""
         from .sensor import build_entities as build_sensors  # pylint: disable=import-outside-toplevel
         from .switch import build_entities as build_switches  # pylint: disable=import-outside-toplevel
 
@@ -285,7 +285,14 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             new_entities = build(self)
             if new_entities:
                 add_entities(new_entities)
-                self._entity_listeners.extend(new_entities)
+        # Adopt every entity of this VTherm, the ones just built and the ones a previous
+        # manager built: VTherm creates a new manager each time the thermostat reloads,
+        # while the entities live as long as this plugin's config entry.
+        for entities in entity_bucket(self._hass, self._vtherm.unique_id).values():
+            for entity in entities:
+                if entity not in self._entity_listeners:
+                    entity.bind(self)
+                    self._entity_listeners.append(entity)
 
     def push_to_entities(self) -> None:
         """Write the new state of every entity of this manager."""

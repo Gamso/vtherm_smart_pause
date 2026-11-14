@@ -28,3 +28,7 @@ class SmartPauseEntity(Entity):
             name=f"{manager.vtherm.name} Smart Pause",
             model=DEVICE_NAME,
         )
+
+    def bind(self, manager: "SmartPauseFeatureManager") -> None:
+        """Read from *manager* from now on: the one VTherm created when the thermostat reloaded."""
+        self._manager = manager
