@@ -56,9 +56,12 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
     VTHERM_AUTO_START_STOP_SUFFIX,
+    VTHERM_CONF_EXTERNAL_TEMP_SENSOR,
 )
+from .bootstrap import async_history_segments
 from .decision import DRIVEN_HVAC_MODES, HVAC_COOL, HVAC_HEAT, PROFILE_ECO, Action, Decision, DecisionEngine, Inputs, Profile, Settings, State
 from .forecast import WeatherForecast
+from .history_learning import HVAC_OFF
 from .log import get_logger, write_event_log
 from .registry import add_entities_registry, managers, merged_config
 from .thermal_model import RecoveryTracker, SegmentRecorder, SensorResolution, ThermalModel
@@ -125,6 +128,9 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self.model = ThermalModel()
         self.engine = DecisionEngine()
         self.enabled = True
+        #: Segments learned from the recorder history at install time, and whether that is still to do.
+        self.history_segments = 0
+        self._bootstrap_pending = False
         self._forecast: WeatherForecast | None = None
         self._resolution = SensorResolution()
         self._recovery = RecoveryTracker()
@@ -289,6 +295,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             "setback": self.setback(mode) if mode in DRIVEN_HVAC_MODES else None,
             "pauses_today": self.engine.pauses_today,
             "vtherm_auto_start_stop": self._native_applied,
+            "history_segments": self.history_segments,
             "heat_loss": round(self.model.heat_loss(mode if mode in DRIVEN_HVAC_MODES else HVAC_HEAT), 4),
             "solar_gain": round(self.model.solar_gain(mode if mode in DRIVEN_HVAC_MODES else HVAC_HEAT), 3),
             "model_ready": self.model.is_ready(mode) if mode in DRIVEN_HVAC_MODES else False,
@@ -326,6 +333,8 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self.model = ThermalModel.from_dict(data.get("model"))
         self.engine.restore(data.get("engine"))
         self.enabled = bool(data.get("enabled", True))
+        self.history_segments = int(data.get("history_segments") or 0)
+        self._bootstrap_pending = not self.model.segments
         self._loaded = True
         _LOGGER.info("%s - loaded (%d learned segments, state %s)", self, len(self.model.segments), self.engine.state)
 
@@ -338,6 +347,7 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
                 "model": self.model.to_dict(),
                 "engine": self.engine.to_dict(),
                 "enabled": self.enabled,
+                "history_segments": self.history_segments,
             }
         )
 
@@ -425,13 +435,13 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
     def _learn(self, now: float, room: float | None, outdoor: float | None, sun: float) -> None:
         """Record the stretches with the equipment really stopped and learn from them.
 
-        A stop is VTherm off (not for a window, nor while it defrosts) or a pause
-        of this plugin. Its HVAC mode is what the physics says: heating when
+        A stop is VTherm off (not fan only or dry, nor for a window, nor while it
+        defrosts) or a pause of this plugin. Its HVAC mode is what the physics says: heating when
         outside is colder.
         """
         mode = self._vtherm.vtherm_hvac_mode
         off_reason = self._vtherm.hvac_off_reason
-        stopped = (mode not in DRIVEN_HVAC_MODES and off_reason != HVAC_OFF_REASON_WINDOW) or self.engine.state == State.PAUSED
+        stopped = (mode == HVAC_OFF and off_reason != HVAC_OFF_REASON_WINDOW) or self.engine.state == State.PAUSED
         if stopped and self._vtherm.hvac_action != HVACAction.DEFROSTING:
             if self._recorder is None and room is not None and outdoor is not None:
                 self._recorder = SegmentRecorder(HVAC_HEAT if outdoor < room else HVAC_COOL, now)
@@ -444,8 +454,32 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
             if segment is not None and self.model.add_segment(segment):
                 _LOGGER.info("%s - learned a stop of %.1f h: k=%.4f/h", self, segment.hours, self.model.heat_loss(segment.hvac_mode))
 
+    async def _async_bootstrap(self, now: float) -> None:
+        """Learn the thermostat's past stops from the recorder history, once, while the model is empty.
+
+        Read on the first cycle rather than at load, when the recorder may not
+        be up yet. A failure is logged and never retried until the next restart:
+        the live learning goes on without it.
+        """
+        if not self._bootstrap_pending:
+            return
+        self._bootstrap_pending = False
+        entry_infos = self._vtherm.entry_infos
+        outdoor_entity = entry_infos.get(VTHERM_CONF_EXTERNAL_TEMP_SENSOR) if hasattr(entry_infos, "get") else None
+        try:
+            segments = await async_history_segments(self._hass, self._vtherm.entity_id, outdoor_entity, self._conf.get(CONF_WEATHER_ENTITY), now)
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.warning("%s - could not read the history, learning from scratch", self, exc_info=True)
+            return
+        added = sum(1 for segment in segments if self.model.add_segment(segment))
+        self.history_segments = added
+        write_event_log(_LOGGER, self, f"learned {added} stops from the recorder history, k={self.model.heat_loss(HVAC_HEAT):.4f}/h")
+        if added:
+            await self.async_save()
+
     async def _async_run_cycle(self, now: float) -> bool:
         """Read, learn, decide, account. Returns True when the pause state changed."""
+        await self._async_bootstrap(now)
         vtherm = self._vtherm
         room = vtherm.current_temperature
         outdoor = vtherm.current_outdoor_temperature

@@ -54,7 +54,8 @@ A VTherm **feature manager** plugin, same skeleton as `vtherm_mpc_fan`.
 | `entity.py` / `sensor.py` / `switch.py` | entities (§9) | yes |
 | `log.py` | `vtherm_api`'s `VThermLogger`, with a `logging` fallback | yes |
 | `const.py` | constants | no |
-| `bootstrap.py` *(planned)* | model bootstrap from the recorder history (§6.4) | yes |
+| `history_learning.py` | stops of a thermostat from recorded series (§6.4) | **no** |
+| `bootstrap.py` | reads the recorder and feeds `history_learning.py` (§6.4) | yes |
 | `data_collection.py` *(planned)* | CSV export in the replay format (§11.1) | yes |
 
 The pure modules import neither Home Assistant nor `vtherm_api`, for the tests and the bench.
@@ -173,10 +174,11 @@ Without a forecast, `T_out` is constant and the sky counts as half covered.
 
 ### 6.3 Learning
 
-- Samples: stretches with the equipment **really** stopped (VTherm `off` other than for a window, or
-  paused by the plugin), without a defrost reported by VTherm, the first 30 minutes dropped (the unit's residual heat).
+- Samples: stretches with the equipment **really** stopped (VTherm `off` other than for a window,
+  not `fan_only` or `dry`, or paused by the plugin), without a defrost reported by VTherm, the
+  first 30 minutes dropped (the unit's residual heat).
 - Each stretch is reduced to three integrals (temperature change, exposure `∫(T_out − T_in) dt`,
-  sun `∫S dt`). `K` is the weighted median of the per-segment ratio over sunless segments, `g` the
+  sun `∫S dt`). `k` is the weighted median of the per-segment ratio over sunless segments, `g` the
   weighted median of the residual over sunny ones. Robust to 0.2 °C sensor steps, no numerical
   library.
 - Sensor resolution detected from the readings. A stretch under 3 h must move at least three steps.
@@ -184,11 +186,28 @@ Without a forecast, `T_out` is constant and the sky counts as half covered.
   segments.
 - Retention: 30 days, plus the 20 newest segments whatever their age.
 
-### 6.4 Bootstrap from history *(planned)*
+### 6.4 Bootstrap from history
 
-At install time, `bootstrap.py` reads the recorder (VTherm, outdoor, power if any) and extracts the
-stop stretches. On the reference period that already gives about 15 usable nights
-(`k ≈ 0.03-0.05 /h`).
+On the first cycle after the model is loaded **empty**, `bootstrap.py` reads the last 10 days of the
+recorder (`recorder.history.get_significant_states`, in the recorder's executor) and learns the
+stops from it. Nothing is read when the model already has segments, so a restart does not read
+it again.
+
+- **Series**: the VTherm's state (its HVAC mode), its `current_temperature` attribute, and the
+  outdoor temperature from the outdoor sensor configured in the VTherm, else from the weather
+  entity's `temperature` attribute.
+- **Learning**: the series are resampled every 5 minutes (each value held until the next) and
+  fed to the same `SegmentRecorder` and `ThermalModel.add_segment` as the live learning. A stop
+  is the thermostat `off`, nothing else. The sun is `solar.sun_factor` with the clouds unknown.
+- **Failure**: no recorder, an empty history or an error is logged and the live learning goes on
+  from scratch. The error is not retried until the next restart.
+- **Visible**: `history_segments` (learned stops) in the VTherm's `smart_pause` attributes and in
+  the heat loss sensor's attributes.
+- **Measured** on the reference dataset: 14 stops, 9 of them sunless, `k` = 0.030 /h, the
+  comfort side ready on the first cycle.
+- **Limit**: the recorded states do not say why the thermostat was off. A stop caused by an open
+  window is read as a stop, which overestimates the loss. The median over segments and the range
+  check on `k` limit the effect.
 
 ### 6.5 Persistence
 
@@ -368,7 +387,7 @@ nothing, VTherm's auto start/stop alone, the plugin.
 | # | Content | Status |
 |---|---|---|
 | 1 | Skeleton: factory, registry, config flow, manager, CI | **done** |
-| 2 | `thermal_model.py`, `k` / autonomy sensors. Bootstrap from history | **done**, except the bootstrap |
+| 2 | `thermal_model.py`, `k` / autonomy sensors. Bootstrap from history | **done** |
 | 3 | `forecast.py` | **done** |
 | 4 | `decision.py` + replay | **done** |
 | 5 | Pause by `setback`. Clear the **[NOT VERIFIED]** of §8.1 with a trial | code **done**. One-day heating trial **to do** |

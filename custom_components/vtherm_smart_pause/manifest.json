@@ -2,6 +2,7 @@
   "domain": "vtherm_smart_pause",
   "name": "Versatile Thermostat Smart Pause",
   "after_dependencies": [
+    "recorder",
     "versatile_thermostat"
   ],
   "codeowners": [
