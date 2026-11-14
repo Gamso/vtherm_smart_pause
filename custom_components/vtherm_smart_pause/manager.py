@@ -58,6 +58,7 @@ from .const import (
     STORAGE_VERSION,
     VTHERM_AUTO_START_STOP_SUFFIX,
     VTHERM_CONF_EXTERNAL_TEMP_SENSOR,
+    VTHERM_CONF_WINDOW_SENSOR,
 )
 from .bootstrap import async_history_segments
 from .decision import DRIVEN_HVAC_MODES, HVAC_COOL, HVAC_HEAT, PROFILE_ECO, Action, Decision, DecisionEngine, Inputs, Profile, Settings, State
@@ -513,8 +514,9 @@ class SmartPauseFeatureManager:  # pylint: disable=too-many-instance-attributes
         self._bootstrap_pending = False
         entry_infos = self._vtherm.entry_infos
         outdoor_entity = entry_infos.get(VTHERM_CONF_EXTERNAL_TEMP_SENSOR) if hasattr(entry_infos, "get") else None
+        window_entity = entry_infos.get(VTHERM_CONF_WINDOW_SENSOR) if hasattr(entry_infos, "get") else None
         try:
-            segments = await async_history_segments(self._hass, self._vtherm.entity_id, outdoor_entity, self._conf.get(CONF_WEATHER_ENTITY), now)
+            segments = await async_history_segments(self._hass, self._vtherm.entity_id, outdoor_entity, self._conf.get(CONF_WEATHER_ENTITY), now, window_entity=window_entity)
         except Exception:  # pylint: disable=broad-except
             _LOGGER.warning("%s - could not read the history, learning from scratch", self, exc_info=True)
             return
