@@ -47,7 +47,7 @@ def build_entities(manager) -> list[SensorEntity]:
 
 def _mode(manager) -> str:
     """The HVAC mode to read the model in: the VTherm's, heat when it is neither heat nor cool."""
-    mode = manager.vtherm.vtherm_hvac_mode
+    mode = manager.hvac_mode
     return mode if mode in DRIVEN_HVAC_MODES else HVAC_HEAT
 
 
