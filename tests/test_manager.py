@@ -1,6 +1,10 @@
 """Tests of the feature manager against a real Home Assistant core and a fake VTherm runtime."""
 
+from datetime import timedelta
+
 from conftest import FakeRuntime, make_entry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.vtherm_smart_pause.const import (
     ATTR_SECTION,
@@ -9,7 +13,7 @@ from custom_components.vtherm_smart_pause.const import (
     HVAC_OFF_REASON_WINDOW,
 )
 from custom_components.vtherm_smart_pause.decision import State
-from custom_components.vtherm_smart_pause.manager import SmartPauseFeatureManager
+from custom_components.vtherm_smart_pause.manager import FORCED_REGULATION_DELAY_S, SmartPauseFeatureManager
 
 
 async def _manager(hass, **data) -> tuple[SmartPauseFeatureManager, FakeRuntime]:
@@ -173,24 +177,26 @@ async def test_a_pause_ended_by_a_window_is_not_evaluated(integration):
     assert not manager.model.errors
 
 
+async def _fire_forced_regulation(hass) -> None:
+    """Let the delay of the forced control cycle elapse."""
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=FORCED_REGULATION_DELAY_S + 1))
+    await hass.async_block_till_done()
+
+
 async def test_a_pause_and_a_resume_force_one_regulation(integration):
-    """A transition asks VTherm for one forced cycle, after the current one. Holding asks for nothing."""
-    manager, runtime = await _manager(integration)
-    runtime.current_temperature = 20.4
-    for _ in range(12):
-        await manager.refresh_state()
-        assert not runtime.control_calls  # never inside VTherm's running cycle
-        await integration.async_block_till_done()
-        runtime.advance(1)
-    assert manager.engine.state == State.PAUSED
+    """A transition asks VTherm for one forced cycle, after a delay. Holding asks for nothing."""
+    manager, runtime = await _paused(integration)
+    await integration.async_block_till_done()
+    assert not runtime.control_calls  # never inside VTherm's running cycle
+    await _fire_forced_regulation(integration)
     assert runtime.control_calls == [True]
     await _cycles(manager, runtime, 5)
-    await integration.async_block_till_done()
+    await _fire_forced_regulation(integration)
     assert runtime.control_calls == [True]
     runtime.current_temperature = 19.4
     await _cycles(manager, runtime, 1)
-    await integration.async_block_till_done()
     assert manager.decision.reason == "comfort"
+    await _fire_forced_regulation(integration)
     assert runtime.control_calls == [True, True]
 
 
@@ -204,6 +210,14 @@ async def test_a_failed_forced_regulation_is_survived(integration, caplog):
     runtime.async_control_heating = failing
     runtime.current_temperature = 20.4
     await _cycles(manager, runtime, 12)
-    await integration.async_block_till_done()
+    await _fire_forced_regulation(integration)
     assert manager.engine.state == State.PAUSED
     assert "forced regulation failed" in caplog.text
+
+
+async def test_stopping_drops_a_pending_forced_regulation(integration):
+    """A manager stopped before the delay elapses asks VTherm for nothing."""
+    manager, runtime = await _paused(integration)
+    manager.stop_listening()
+    await _fire_forced_regulation(integration)
+    assert not runtime.control_calls

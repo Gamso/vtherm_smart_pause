@@ -251,7 +251,7 @@ What follows was read in the code of `vtherm_api` 0.9.0 and VTherm (`main`, 10.6
 - The send may be **deferred**: a change below `dtemp` is swallowed, the self-regulation period is
   respected (20 s delay). VTherm also sends the regulated temperature **before** it refreshes its
   plugins, so a decision taken in `refresh_state` would only reach the equipment a cycle later. On a
-  pause or a resume only, the plugin asks for one forced control cycle right after the current one
+  pause or a resume only, the plugin asks for one forced control cycle two seconds later
   (`async_control_heating(force=True)`, in `InterfaceThermostatRuntime`), which bypasses the period
   and the `dtemp` filter for that send. The transitions stay bounded by the plugin's guards (minimum
   run, minimum pause, pauses per day): only their timing moves.
