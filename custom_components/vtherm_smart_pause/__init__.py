@@ -13,12 +13,24 @@ import asyncio
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import STATE_OFF, STATE_ON, Platform
 from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.storage import Store
 
-from .const import CONF_TARGET_VTHERM, CONF_THERMOSTAT_CLIMATE, CONF_THERMOSTAT_TYPE, DATA_FACTORY_REGISTERED, DOMAIN, FEATURE_MANAGER_NAME, VTHERM_DOMAIN
+from .const import (
+    CONF_TARGET_VTHERM,
+    CONF_THERMOSTAT_CLIMATE,
+    CONF_THERMOSTAT_TYPE,
+    DATA_FACTORY_REGISTERED,
+    DOMAIN,
+    FEATURE_MANAGER_NAME,
+    STORAGE_KEY,
+    STORAGE_VERSION,
+    VTHERM_DOMAIN,
+)
 from .factory import SmartPauseManagerFactory
+from .manager import native_switch
 from .log import get_logger
 from .registry import clear_registry, domain_data
 
@@ -118,3 +130,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if hass.state == CoreState.running:
         await _reload_target_vtherm(hass, entry)
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Hand VTherm's auto start/stop back as its owner had it, and delete what the plugin learned.
+
+    Called once the entry is unloaded, so no manager writes the switch again.
+    """
+    store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}.{entry.entry_id}")
+    data = await store.async_load() or {}
+    before = data.get("native_before")
+    target = entry.data.get(CONF_TARGET_VTHERM)
+    switch = native_switch(hass, target) if target else None
+    state = hass.states.get(switch) if switch else None
+    if isinstance(before, bool) and state is not None and state.state in (STATE_ON, STATE_OFF) and (state.state == STATE_ON) != before:
+        _LOGGER.info("Restoring %s to %s, as it was before the smart pause", switch, "on" if before else "off")
+        await hass.services.async_call("switch", "turn_on" if before else "turn_off", {"entity_id": switch}, blocking=True)
+    await store.async_remove()

@@ -155,7 +155,6 @@ during a pause.
 ## Limits of this version
 
 - Pauses by setback only. The full stop (VTherm inhibition) is planned.
-- VTherm's auto start/stop switch is not restored to its previous state when the plugin is removed.
 - The comfort side needs three stops of at least two hours without sun. They come from the
   recorder history at install time, or else from three nights with the thermostat off.
 - The history does not say why the thermostat was off. A stop caused by an open window is read as

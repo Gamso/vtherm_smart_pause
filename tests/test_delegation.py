@@ -2,9 +2,11 @@
 
 from conftest import FakeRuntime, make_entry
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.storage import Store
 from pytest_homeassistant.common import MockConfigEntry
 
-from custom_components.vtherm_smart_pause.const import CONF_THRESHOLD_COOL, CONF_THRESHOLD_HEAT, VTHERM_DOMAIN
+from custom_components.vtherm_smart_pause import async_remove_entry
+from custom_components.vtherm_smart_pause.const import CONF_THRESHOLD_COOL, CONF_THRESHOLD_HEAT, STORAGE_KEY, STORAGE_VERSION, VTHERM_DOMAIN
 from custom_components.vtherm_smart_pause.decision import State
 from custom_components.vtherm_smart_pause.manager import SmartPauseFeatureManager
 
@@ -140,3 +142,46 @@ async def test_disabled_plugin_leaves_the_switch_alone(integration):
     await manager.async_set_enabled(False)
     await _cycle(integration, manager, runtime, 2)
     assert not calls
+
+
+async def _remove(hass) -> None:
+    """Run the plugin's removal hook on its entry, as Home Assistant does once it is unloaded."""
+    (entry,) = hass.config_entries.async_entries("vtherm_smart_pause")
+    await async_remove_entry(hass, entry)
+    await hass.async_block_till_done()
+
+
+async def test_removal_restores_the_switch(integration):
+    """The switch was on before the plugin turned it off: removing the plugin turns it back on and deletes its Store."""
+    calls = _native_switch(integration, state="on")
+    manager, runtime = await _manager(integration, **{CONF_THRESHOLD_HEAT: None})
+    await _cycle(integration, manager, runtime)
+    assert calls == ["turn_off"]
+    store_key = f"{STORAGE_KEY}.{manager.entry_id}"
+    await _remove(integration)
+    assert calls == ["turn_off", "turn_on"]
+    assert await Store(integration, STORAGE_VERSION, store_key).async_load() is None
+
+
+async def test_removal_keeps_a_switch_the_plugin_never_changed(integration):
+    """A switch already where the plugin wanted it was not changed by it, and is not changed at removal."""
+    calls = _native_switch(integration, state="off")
+    manager, runtime = await _manager(integration, **{CONF_THRESHOLD_HEAT: None})
+    await _cycle(integration, manager, runtime)
+    assert not calls
+    await _remove(integration)
+    assert not calls
+
+
+async def test_removal_restores_the_state_before_the_first_write(integration):
+    """Off at install, turned on then off by the plugin: it goes back to off, the state its owner had chosen."""
+    calls = _native_switch(integration, state="off")
+    manager, runtime = await _manager(integration)
+    await _cycle(integration, manager, runtime)
+    runtime.target_temperature = 21.0
+    await _cycle(integration, manager, runtime)
+    runtime.target_temperature = 20.0
+    await _cycle(integration, manager, runtime)
+    assert calls == ["turn_on", "turn_off", "turn_on"]
+    await _remove(integration)
+    assert calls == ["turn_on", "turn_off", "turn_on", "turn_off"]
